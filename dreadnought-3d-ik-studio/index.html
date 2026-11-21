@@ -1,0 +1,3454 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>3D-Студия: Тяжелый Дредноут — IK-Анимации и Боевая Механика</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; font-family: 'Inter', sans-serif; }
+    body { margin: 0; overflow: hidden; background: #11141a; color: #f1f5f9; user-select: none; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); }
+    ::-webkit-scrollbar-thumb { background: rgba(245, 158, 11, 0.45); border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(245, 158, 11, 0.75); }
+    .anim-btn.active {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.25), rgba(234, 88, 12, 0.35));
+      border-color: #f59e0b;
+      color: #ffffff;
+      box-shadow: 0 0 16px rgba(245, 158, 11, 0.25);
+    }
+    .cam-btn.active, .mode-btn.active {
+      background: rgba(245, 158, 11, 0.22);
+      border-color: #f59e0b;
+      color: #fbbf24;
+    }
+    input[type="range"] {
+      accent-color: #f59e0b;
+    }
+  </style>
+</head>
+<body class="h-screen w-screen flex flex-col bg-slate-950 text-slate-100 overflow-hidden">
+  <div id="runtimeErrorBanner" class="hidden fixed top-3 left-3 right-3 bg-red-950/95 border-2 border-red-500 text-red-100 text-xs p-3.5 rounded-xl z-50 shadow-2xl backdrop-blur-md font-mono"></div>
+
+  <!-- TOP HEADER BAR -->
+  <header class="h-14 shrink-0 bg-slate-900/95 border-b border-amber-500/30 px-4 flex items-center justify-between gap-3 z-20">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="w-9 h-9 rounded-lg bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 font-extrabold text-sm shrink-0">
+        IK
+      </div>
+      <div class="truncate">
+        <h1 class="text-sm sm:text-base font-bold tracking-wide text-slate-100 truncate">
+          ТЯЖЕЛЫЙ ДРЕДНОУТ MK-IV // ПОЛНАЯ ОБРАТНАЯ КИНЕМАТИКА (IK) И ФИЗИКА УДАРОВ
+        </h1>
+        <p id="meshStatsText" class="text-[11px] text-amber-400/90 truncate">
+          Загрузка геометрии и IK-решателя...
+        </p>
+      </div>
+    </div>
+
+    <!-- DOWNLOAD & AUDIO CONTROLS -->
+    <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+      <button id="btnAudioToggle" type="button" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition" title="Звуковые эффекты (синтезатор)">
+        <span id="audioIcon">🔇</span>
+        <span id="audioLabel" class="hidden md:inline">Звук: Выкл</span>
+      </button>
+      <button id="btnDownloadGLB" type="button" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition">
+        <span>⬇</span>
+        <span>.GLTF</span>
+      </button>
+      <button id="btnDownloadOBJ" type="button" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-amber-500/40 text-amber-300 font-semibold text-xs flex items-center gap-1 transition">
+        <span>⬇</span>
+        <span>.OBJ</span>
+      </button>
+      <button id="btnDownloadSTL" type="button" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold text-xs flex items-center gap-1 transition">
+        <span>⬇</span>
+        <span>.STL</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN WORKSPACE -->
+  <div class="flex-1 flex flex-col lg:flex-row min-h-0 relative overflow-hidden">
+
+    <!-- 3D VIEWPORT CONTAINER -->
+    <div id="viewportContainer" class="relative flex-1 min-h-[340px] h-full bg-slate-900 overflow-hidden cursor-grab active:cursor-grabbing">
+      <canvas id="threeCanvas" class="w-full h-full block"></canvas>
+
+      <!-- TOP-LEFT FLOATING CAMERA & SHADING BAR -->
+      <div class="absolute top-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+        <div class="flex flex-wrap items-center gap-1.5 bg-slate-950/85 backdrop-blur-md p-1.5 rounded-xl border border-slate-800 pointer-events-auto">
+          <span class="text-[11px] font-semibold text-slate-400 px-1.5">Камера:</span>
+          <button type="button" data-cam="ref1" class="cam-btn active px-2 py-1 rounded-md border border-slate-700/80 text-xs font-medium text-slate-300 hover:text-white transition">Референс 3/4</button>
+          <button type="button" data-cam="combat" class="cam-btn px-2 py-1 rounded-md border border-slate-700/80 text-xs font-medium text-slate-300 hover:text-white transition">Боевой</button>
+          <button type="button" data-cam="front" class="cam-btn px-2 py-1 rounded-md border border-slate-700/80 text-xs font-medium text-slate-300 hover:text-white transition">Спереди</button>
+          <button type="button" data-cam="side" class="cam-btn px-2 py-1 rounded-md border border-slate-700/80 text-xs font-medium text-slate-300 hover:text-white transition">Сбоку</button>
+          <button type="button" data-cam="back" class="cam-btn px-2 py-1 rounded-md border border-slate-700/80 text-xs font-medium text-slate-300 hover:text-white transition">Реакторы (Сзади)</button>
+          <button type="button" data-cam="closeup" class="cam-btn px-2 py-1 rounded-md border border-slate-700/80 text-xs font-medium text-slate-300 hover:text-white transition">Крупный план</button>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-1.5 bg-slate-950/85 backdrop-blur-md p-1.5 rounded-xl border border-slate-800 pointer-events-auto">
+          <button id="btnModeShaded" type="button" class="mode-btn active px-2.5 py-1 rounded-md border border-slate-700 text-xs font-medium transition">PBR + Грани</button>
+          <button id="btnModeWireOverlay" type="button" class="mode-btn px-2.5 py-1 rounded-md border border-slate-700 text-xs font-medium transition">PBR + Сетка</button>
+          <button id="btnModeWireOnly" type="button" class="mode-btn px-2.5 py-1 rounded-md border border-slate-700 text-xs font-medium transition">Только Сетка</button>
+          <button id="btnToggleTextures" type="button" class="px-2.5 py-1 rounded-md bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-xs font-semibold text-amber-300 transition">🎨 Текстуры: Вкл</button>
+          <button id="btnToggleIKGizmos" type="button" class="px-2.5 py-1 rounded-md bg-emerald-950/80 hover:bg-emerald-900/80 border border-emerald-500/50 text-xs font-semibold text-emerald-300 transition">🎯 IK-узлы: Вкл</button>
+          <button id="btnBgToggle" type="button" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-200 transition">Фон: Студия</button>
+          <button id="btnAutoRotate" type="button" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-200 transition">Авто-облет: Выкл</button>
+        </div>
+      </div>
+
+      <!-- BOTTOM-LEFT LIVE TELEMETRY & CURRENT ANIMATION BANNER -->
+      <div class="absolute bottom-3 left-3 right-3 flex flex-wrap items-end justify-between gap-2 pointer-events-none">
+        <div class="bg-slate-950/90 backdrop-blur-md border border-amber-500/40 rounded-xl px-3.5 py-2.5 max-w-lg pointer-events-auto shadow-xl">
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+              <span id="activeAnimTitle" class="text-xs sm:text-sm font-bold text-amber-400 uppercase tracking-wider">
+                07 // КОМБО КЛЕШНЕЙ: СНОС 180° + АППЕРКОТ (100% ФИКСИРОВАННЫЕ СТОПЫ)
+              </span>
+            </div>
+            <span id="ikPhaseBadge" class="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-[10px] font-mono text-amber-300">
+              IK ACTIVE
+            </span>
+          </div>
+          <p id="activeAnimDesc" class="text-xs text-slate-300 mt-1">
+            Исправлено отрывание ступней: ступни жестко закреплены на костях голеней без смещения сустава, а размашистое комбо отрегулировано по анатомической длине ног.
+          </p>
+        </div>
+
+        <div class="bg-slate-950/85 backdrop-blur-md border border-slate-800 rounded-xl px-3 py-2 text-[11px] text-slate-400 pointer-events-auto hidden sm:block">
+          🖱️ <b class="text-slate-200">ЛКМ / Палец:</b> Вращение 360° &nbsp;|&nbsp; <b class="text-slate-200">ПКМ:</b> Панорама &nbsp;|&nbsp; <b class="text-slate-200">Колесо:</b> Зум
+        </div>
+      </div>
+
+      <!-- TOAST NOTIFICATION -->
+      <div id="toastBox" class="hidden absolute top-16 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-950 font-bold text-xs px-4 py-2 rounded-full shadow-2xl z-30 transition-all">
+        Готово!
+      </div>
+    </div>
+
+    <!-- RIGHT SIDEBAR: ANIMATIONS & RIG CONTROLS -->
+    <aside class="w-full lg:w-96 shrink-0 bg-slate-900/95 border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col max-h-[46vh] lg:max-h-none overflow-hidden z-10">
+
+      <!-- SIDEBAR TABS -->
+      <div class="flex border-b border-slate-800 bg-slate-950/60 shrink-0">
+        <button id="tabBtnAnims" type="button" class="flex-1 py-2.5 text-xs font-bold uppercase tracking-wider border-b-2 border-amber-500 text-amber-400 bg-slate-900/60 transition">
+          🎬 IK-Анимации (11)
+        </button>
+        <button id="tabBtnRig" type="button" class="flex-1 py-2.5 text-xs font-bold uppercase tracking-wider border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition">
+          ⚙️ Ручной Риг и Оружие
+        </button>
+      </div>
+
+      <!-- TAB 1: ANIMATIONS PANEL -->
+      <div id="panelAnims" class="flex-1 overflow-y-auto p-3 space-y-2.5">
+        <!-- Playback Bar -->
+        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-2.5 flex flex-col gap-2">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-1.5">
+              <button id="btnPlayPause" type="button" class="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition">
+                ⏸ Пауза
+              </button>
+              <button id="btnTriggerAction" type="button" class="px-2.5 py-1 rounded-lg bg-orange-600/30 hover:bg-orange-600/50 border border-orange-500/50 text-orange-300 font-semibold text-xs transition">
+                💥 Залп / Эффект
+              </button>
+            </div>
+            <span id="speedValueLabel" class="text-xs font-semibold text-amber-400">Скорость: 1.0x</span>
+          </div>
+          <input id="sliderSpeed" type="range" min="0.1" max="2.0" step="0.1" value="1.0" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+        </div>
+
+        <!-- Animation Presets Grid -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-1.5" id="animButtonsContainer">
+          <button type="button" data-anim="claw_combo" class="anim-btn active text-left p-2.5 rounded-xl border border-slate-800 bg-slate-950/60 hover:bg-slate-800/70 transition flex items-start gap-2.5">
+            <span class="text-base mt-0.5">⚔️</span>
+            <div class="min-w-0">
+              <div class="text-xs font-bold text-slate-100">7. Комбо: Боковой наотмашь + Апперкот</div>
+              <div class="text-[11px] text-amber-300/90 truncate">Амплитуда x3: снос на 180° с выпадом + апперкот от земли в небо</div>
+            </div>
+          </button>
+
+          <button type="button" data-anim="claw_smash" class="anim-btn text-left p-2.5 rounded-xl border border-slate-800 bg-slate-950/60 hover:bg-slate-800/70 transition flex items-start gap-2.5">
+            <span class="text-base mt-0.5">🦀</span>
+            <div class="min-w-0">
+              <div class="text-xs font-bold text-slate-100">6. Сокрушающий Удар Клешней</div>
+              <div class="text-[11px] text-amber-300/90 truncate">Глубокий замах -75°, шаг-выпад с IK стоп и дуговой пролом</div>
+            </div>
+          </button>
+
+          <button type="button" data-anim="idle" class="anim-btn text-left p-2.5 rounded-xl border border-slate-800 bg-slate-950/60 hover:bg-slate-800/70 transition flex items-start gap-2.5">
+            <span class="text-base mt-0.5">👁️</span>
+            <div class="min-w-0">
+              <div class="text-xs font-bold text-slate-100">1. Ожидание и Сканирование (Foot IK)</div>
+              <div class="text-[11px] text-slate-400 truncate">Жесткая фиксация стоп на полу при дыхании гидравлики</div>
+            </div>
+          </button>
+
+          <button type="button" data-anim="walk" class="anim-btn text-left p-2.5 rounded-xl border border-slate-800 bg-slate-950/60 hover:bg-slate-800/70 transition flex items-start gap-2.5">
+            <span class="text-base mt-0.5">🦿</span>
+            <div class="min-w-0">
+              <div class="text-xs font-bold text-slate-100">2. Тяжелый Марш Дредноута (IK-Цикл)</div>
+              <div class="text-[11px] text-slate-400 truncate">Честный перекат стопы без скольжения и прогиб амортизаторов</div>
+            </div>
+          </button>
+
+          <button type="button" data-anim="run" class="anim-btn text-left p-2.5 rounded-xl border border-slate-800 bg-slate-950/60 hover:bg-slate-800/70 transition flex items-start gap-2.5">
+            <span class="text-base mt-0.5">⚡</span>
+            <div class="min-w-0">
+              <div class="text-xs font-bold text-slate-100">3. Штурмовой Бег (Спринт с IK)</div>
+              <div class="text-[11px] text-slate-400 truncate">Наклон корпуса вперед, форсаж реакторов и мощный толчок</div>
+            </div>
+          </button>
+
+          <button type="button" data-anim="railgun" class="anim-btn text-left p-2.5 rounded-xl border border-slate-800 bg-slate-950/60 hover:bg-slate-800/70 transition flex items-start gap-2.5">
+            <span class="text-base mt-0.5">🔥</span>
+            <div class="min-w-0">
+              <div class="text-xs font-bold text-slate-100">4. Очередь из Рельсотрона</div>
+              <div class="text-[11px] text-slate-400 truncate">Широкий боевой упор ног (IK), отдача в плечо и корпус</div>
+            </div>
+          </button>
+
+          <button type="button" data-anim="missiles" class="anim-btn text-left p-2.5 rounded-xl border border-slate-800 bg-slate-950/60 hover:bg-slate-800/70 transition flex items-start gap-2.5">
+            <span class="text-base mt-0.5">🚀</span>
+            <div class="min-w-0">
+              <div class="text-xs font-bold text-slate-100">5. Ракетный Шквал из Кассет</div>
+              <div class="text-[11px] text-slate-400 truncate">Глубокий присед на IK-ногах и веерный пуск 14 ракет</div>
+            </div>
+          </button>
+
+          <button type="button" data-anim="shield_wall" class="anim-btn text-left p-2.5 rounded-xl border border-slate-800 bg-slate-950/60 hover:bg-slate-800/70 transition flex items-start gap-2.5">
+            <span class="text-base mt-0.5">🛡️</span>
+            <div class="min-w-0">
+              <div class="text-xs font-bold text-slate-100">8. Энергетический Щит (Оборона)</div>
+              <div class="text-[11px] text-slate-400 truncate">Сгибание локтя, защита корпуса и прием импульса щитом</div>
+            </div>
+          </button>
+
+          <button type="button" data-anim="jet_jump" class="anim-btn text-left p-2.5 rounded-xl border border-slate-800 bg-slate-950/60 hover:bg-slate-800/70 transition flex items-start gap-2.5">
+            <span class="text-base mt-0.5">☄️</span>
+            <div class="min-w-0">
+              <div class="text-xs font-bold text-slate-100">9. Реактивный Прыжок и Приземление</div>
+              <div class="text-[11px] text-slate-400 truncate">Присед, взлет и гашение удара приземления через IK ног</div>
+            </div>
+          </button>
+
+          <button type="button" data-anim="victory" class="anim-btn text-left p-2.5 rounded-xl border border-slate-800 bg-slate-950/60 hover:bg-slate-800/70 transition flex items-start gap-2.5">
+            <span class="text-base mt-0.5">🏆</span>
+            <div class="min-w-0">
+              <div class="text-xs font-bold text-slate-100">10. Победный Рев / Боевой Клич</div>
+              <div class="text-[11px] text-slate-400 truncate">Раскрытие всех систем, вращение клешни и салют</div>
+            </div>
+          </button>
+
+          <button type="button" data-anim="dance" class="anim-btn text-left p-2.5 rounded-xl border border-slate-800 bg-slate-950/60 hover:bg-slate-800/70 transition flex items-start gap-2.5">
+            <span class="text-base mt-0.5">🕺</span>
+            <div class="min-w-0">
+              <div class="text-xs font-bold text-slate-100">11. Кибер-Танец Дредноута</div>
+              <div class="text-[11px] text-slate-400 truncate">Кач тазом при фиксированных IK-стопах и притоп</div>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- TAB 2: MANUAL RIG & WEAPON OVERRIDES -->
+      <div id="panelRig" class="hidden flex-1 overflow-y-auto p-3 space-y-3">
+        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-amber-400 uppercase">Системы Вооружения</span>
+            <button id="btnResetRig" type="button" class="text-[11px] text-slate-400 hover:text-amber-300 underline">Сбросить позу</button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <button id="btnToggleShield" type="button" class="p-2 rounded-lg bg-cyan-950/60 hover:bg-cyan-900/60 border border-cyan-500/40 text-cyan-300 text-xs font-semibold transition">
+              🛡️ Энергощит: Вкл/Выкл
+            </button>
+            <button id="btnToggleHatches" type="button" class="p-2 rounded-lg bg-amber-950/60 hover:bg-amber-900/60 border border-amber-500/40 text-amber-300 text-xs font-semibold transition">
+              🚀 Люки кассет: Откр
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-3 space-y-3">
+          <div class="text-xs font-bold text-slate-200 uppercase">Ручное управление узлами рига</div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-400">Поворот торса (Yaw)</span>
+              <span id="valTorsoYaw" class="text-amber-400 font-mono">0°</span>
+            </div>
+            <input id="sliderTorsoYaw" type="range" min="-65" max="65" step="1" value="0" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-400">Наклон корпуса (Pitch)</span>
+              <span id="valTorsoPitch" class="text-amber-400 font-mono">0°</span>
+            </div>
+            <input id="sliderTorsoPitch" type="range" min="-25" max="30" step="1" value="0" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-400">Левая рука: Прицел Рельсотрона</span>
+              <span id="valArmLPitch" class="text-amber-400 font-mono">0°</span>
+            </div>
+            <input id="sliderArmLPitch" type="range" min="-70" max="35" step="1" value="0" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-400">Правая рука: Подъем Клешни</span>
+              <span id="valArmRPitch" class="text-amber-400 font-mono">0°</span>
+            </div>
+            <input id="sliderArmRPitch" type="range" min="-85" max="35" step="1" value="0" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-400">Раскрытие захватов Клешни</span>
+              <span id="valClawOpen" class="text-amber-400 font-mono">35%</span>
+            </div>
+            <input id="sliderClawOpen" type="range" min="0" max="100" step="1" value="35" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-400">Вращение запястья Клешни</span>
+              <span id="valWristSpin" class="text-amber-400 font-mono">0°</span>
+            </div>
+            <input id="sliderWristSpin" type="range" min="-180" max="180" step="2" value="0" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+          </div>
+        </div>
+      </div>
+
+    </aside>
+  </div>
+
+  
+
+          <script>
+    window.onerror = function(msg, url, line) {
+      const b = document.getElementById('runtimeErrorBanner');
+      if (b) {
+        b.classList.remove('hidden');
+        b.innerHTML = '<b>Внимание:</b> ' + msg + ' (строка ' + line + ')';
+      }
+    };
+    // =========================================================================
+    // 1. SYNTHESIZED SOUND EFFECTS (WEB AUDIO API)
+    // =========================================================================
+    let audioCtx = null;
+    let audioEnabled = false;
+
+    function initAudio() {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) audioCtx = new AudioContextClass();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function playSound(type) {
+      if (!audioEnabled || !audioCtx) return;
+      const now = audioCtx.currentTime;
+      if (type === 'stomp') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(95, now);
+        osc.frequency.exponentialRampToValueAtTime(24, now + 0.26);
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.29);
+      } else if (type === 'railgun') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(520, now);
+        osc.frequency.exponentialRampToValueAtTime(55, now + 0.22);
+        gain.gain.setValueAtTime(0.28, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      } else if (type === 'missile') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(240, now);
+        osc.frequency.exponentialRampToValueAtTime(680, now + 0.14);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.17);
+      } else if (type === 'smash') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(145, now);
+        osc.frequency.exponentialRampToValueAtTime(16, now + 0.52);
+        gain.gain.setValueAtTime(0.50, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.56);
+      } else if (type === 'shield_deploy') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.28);
+        gain.gain.setValueAtTime(0.22, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.35);
+      } else if (type === 'whoosh') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(180, now);
+        osc.frequency.exponentialRampToValueAtTime(65, now + 0.22);
+        gain.gain.setValueAtTime(0.22, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      }
+    }
+
+    function showToast(msg) {
+      const box = document.getElementById('toastBox');
+      box.textContent = msg;
+      box.classList.remove('hidden');
+      clearTimeout(box._timer);
+      box._timer = setTimeout(() => box.classList.add('hidden'), 2600);
+    }
+
+    // =========================================================================
+    // 2. PROCEDURAL HARD-SURFACE BUFFERGEOMETRY BUILDERS (EXACT REFERENCE MESH)
+    // =========================================================================
+    let totalVertices = 0;
+    let totalTriangles = 0;
+    const edgeLinesList = [];
+    const allMeshesList = [];
+
+    function rotXMat(a) {
+      const m = new THREE.Matrix4();
+      m.makeRotationX(a);
+      return m;
+    }
+    function rotYMat(a) {
+      const m = new THREE.Matrix4();
+      m.makeRotationY(a);
+      return m;
+    }
+    function rotZMat(a) {
+      const m = new THREE.Matrix4();
+      m.makeRotationZ(a);
+      return m;
+    }
+
+    function buildLoftGeometry(slices, capBot = true, capTop = true) {
+      const numRings = slices.length;
+      const nPts = slices[0].length;
+      const positions = [];
+      const uvs = [];
+
+      // Conformal Parametric UV mapping: u flows around perimeter, v flows along slice rings!
+      for (let r = 0; r < numRings - 1; r++) {
+        const v0 = r / (numRings - 1);
+        const v1 = (r + 1) / (numRings - 1);
+        for (let i = 0; i < nPts; i++) {
+          const u0 = i / nPts;
+          const u1 = (i + 1) / nPts;
+
+          const p00 = slices[r][i];
+          const p10 = slices[r][(i + 1) % nPts];
+          const p01 = slices[r + 1][i];
+          const p11 = slices[r + 1][(i + 1) % nPts];
+
+          // Triangle 1: (p00, p10, p11)
+          positions.push(...p00, ...p10, ...p11);
+          uvs.push(u0, v0, u1, v0, u1, v1);
+
+          // Triangle 2: (p00, p11, p01)
+          positions.push(...p00, ...p11, ...p01);
+          uvs.push(u0, v0, u1, v1, u0, v1);
+        }
+      }
+
+      // Bottom cap fan with radial UV coordinates centered at [0.5, 0.5]
+      if (capBot) {
+        let cx = 0, cy = 0, cz = 0;
+        for (let i = 0; i < nPts; i++) {
+          cx += slices[0][i][0]; cy += slices[0][i][1]; cz += slices[0][i][2];
+        }
+        cx /= nPts; cy /= nPts; cz /= nPts;
+        const centerPt = [cx, cy, cz];
+
+        for (let i = 0; i < nPts; i++) {
+          const ni = (i + 1) % nPts;
+          const p0 = slices[0][i];
+          const p1 = slices[0][ni];
+          const a0 = (i / nPts) * Math.PI * 2;
+          const a1 = (ni / nPts) * Math.PI * 2;
+
+          positions.push(...centerPt, ...p1, ...p0);
+          uvs.push(
+            0.5, 0.5,
+            0.5 + 0.46 * Math.cos(a1), 0.5 + 0.46 * Math.sin(a1),
+            0.5 + 0.46 * Math.cos(a0), 0.5 + 0.46 * Math.sin(a0)
+          );
+        }
+      }
+
+      // Top cap fan with radial UV coordinates centered at [0.5, 0.5]
+      if (capTop) {
+        const topSlice = slices[numRings - 1];
+        let cx = 0, cy = 0, cz = 0;
+        for (let i = 0; i < nPts; i++) {
+          cx += topSlice[i][0]; cy += topSlice[i][1]; cz += topSlice[i][2];
+        }
+        cx /= nPts; cy /= nPts; cz /= nPts;
+        const centerPt = [cx, cy, cz];
+
+        for (let i = 0; i < nPts; i++) {
+          const ni = (i + 1) % nPts;
+          const p0 = topSlice[i];
+          const p1 = topSlice[ni];
+          const a0 = (i / nPts) * Math.PI * 2;
+          const a1 = (ni / nPts) * Math.PI * 2;
+
+          positions.push(...centerPt, ...p0, ...p1);
+          uvs.push(
+            0.5, 0.5,
+            0.5 + 0.46 * Math.cos(a0), 0.5 + 0.46 * Math.sin(a0),
+            0.5 + 0.46 * Math.cos(a1), 0.5 + 0.46 * Math.sin(a1)
+          );
+        }
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.computeVertexNormals();
+
+      totalVertices += geo.attributes.position.count;
+      totalTriangles += geo.attributes.position.count / 3;
+      return geo;
+    }
+
+    function applyPointTransform(pt, rotMat, center) {
+      const v = new THREE.Vector3(pt[0], pt[1], pt[2]);
+      if (rotMat) v.applyMatrix4(rotMat);
+      if (center) v.add(new THREE.Vector3(center[0], center[1], center[2]));
+      return [v.x, v.y, v.z];
+    }
+
+    function addBeveledBlock(parent, sx, sy, sz, opts = {}) {
+      const chamfer = opts.chamfer !== undefined ? opts.chamfer : 0.045;
+      const taperTop = opts.taperTop || [1.0, 1.0];
+      const taperFront = opts.taperFront !== undefined ? opts.taperFront : 1.0;
+      const center = opts.center || [0, 0, 0];
+      const R = opts.R || null;
+      const mat = opts.mat;
+
+      const hx = sx * 0.5, hy = sy * 0.5, hz = sz * 0.5;
+      const c = Math.min(chamfer, hx * 0.38, hy * 0.38, hz * 0.38);
+      const tx = taperTop[0], tz = taperTop[1];
+
+      function makeRing(yVal, rx, rz, ft, bC) {
+        rx = Math.max(rx, 0.005);
+        rz = Math.max(rz, 0.005);
+        const bc = Math.min(bC, rx * 0.35, rz * 0.35);
+        const rxf = rx * ft;
+        const raw = [
+          [-rxf + bc, yVal,  rz],
+          [ rxf - bc, yVal,  rz],
+          [ rxf,      yVal,  rz - bc],
+          [ rx,       yVal, -rz + bc],
+          [ rx - bc,  yVal, -rz],
+          [-rx + bc,  yVal, -rz],
+          [-rx,       yVal, -rz + bc],
+          [-rxf,      yVal,  rz - bc],
+        ];
+        return raw.map(p => applyPointTransform(p, R, center));
+      }
+
+      const slices = [
+        makeRing(-hy,     hx - c,          hz - c,          1.0,                  c * 0.7),
+        makeRing(-hy + c, hx,              hz,              1.0,                  c),
+        makeRing(0.0,     hx * (1+tx)*0.5, hz * (1+tz)*0.5, (1 + taperFront)*0.5, c),
+        makeRing(hy - c,  hx * tx,         hz * tz,         taperFront,           c),
+        makeRing(hy,      hx * tx - c,     hz * tz - c,     taperFront,           c * 0.7),
+      ];
+
+      const geo = buildLoftGeometry(slices, true, true);
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+
+      const edgesGeo = new THREE.EdgesGeometry(geo, 28);
+      const line = new THREE.LineSegments(edgesGeo, edgeHighlightMat);
+      mesh.add(line);
+      edgeLinesList.push(line);
+      allMeshesList.push(mesh);
+
+      parent.add(mesh);
+      return mesh;
+    }
+
+    function addCylinderPart(parent, rBot, rTop, height, opts = {}) {
+      const segs = opts.segs || 20;
+      const bevel = opts.bevel !== undefined ? opts.bevel : 0.018;
+      const center = opts.center || [0, 0, 0];
+      const axis = opts.axis || 'y';
+      const R = opts.R || null;
+      const mat = opts.mat;
+
+      const hy = height * 0.5;
+      const b = Math.min(bevel, hy * 0.35, Math.min(rBot, rTop) * 0.35);
+
+      const yLevels = b > 1e-4 ? [
+        [-hy,     Math.max(0.002, rBot - b)],
+        [-hy + b, rBot],
+        [ hy - b, rTop],
+        [ hy,     Math.max(0.002, rTop - b)]
+      ] : [
+        [-hy, rBot],
+        [ hy, rTop]
+      ];
+
+      const rotAx = new THREE.Matrix4();
+      if (axis === 'x') rotAx.makeRotationZ(-Math.PI / 2);
+      else if (axis === 'z') rotAx.makeRotationX(Math.PI / 2);
+      if (R) rotAx.premultiply(R);
+
+      const slices = yLevels.map(([yV, rad]) => {
+        const ring = [];
+        for (let i = 0; i < segs; i++) {
+          const ang = (i / segs) * Math.PI * 2;
+          const pt = [rad * Math.cos(ang), yV, rad * Math.sin(ang)];
+          ring.push(applyPointTransform(pt, rotAx, center));
+        }
+        return ring;
+      });
+
+      const geo = buildLoftGeometry(slices, true, true);
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      allMeshesList.push(mesh);
+      parent.add(mesh);
+      return mesh;
+    }
+
+    function addTubePart(parent, rOuter, rInner, height, opts = {}) {
+      const segs = opts.segs || 20;
+      const center = opts.center || [0, 0, 0];
+      const axis = opts.axis || 'z';
+      const R = opts.R || null;
+      const mat = opts.mat;
+
+      const hy = height * 0.5;
+      const rotAx = new THREE.Matrix4();
+      if (axis === 'x') rotAx.makeRotationZ(-Math.PI / 2);
+      else if (axis === 'z') rotAx.makeRotationX(Math.PI / 2);
+      if (R) rotAx.premultiply(R);
+
+      const rOutBot = [], rOutTop = [], rInBot = [], rInTop = [];
+      for (let i = 0; i < segs; i++) {
+        const a = (i / segs) * Math.PI * 2;
+        const ca = Math.cos(a), sa = Math.sin(a);
+        rOutBot.push(applyPointTransform([rOuter * ca, -hy, rOuter * sa], rotAx, center));
+        rOutTop.push(applyPointTransform([rOuter * ca,  hy, rOuter * sa], rotAx, center));
+        rInBot.push(applyPointTransform([rInner * ca, -hy, rInner * sa], rotAx, center));
+        rInTop.push(applyPointTransform([rInner * ca,  hy, rInner * sa], rotAx, center));
+      }
+
+      const positions = [];
+      const uvs = [];
+
+      // Outer cylinder wall: u around perimeter, v along height
+      for (let i = 0; i < segs; i++) {
+        const ni = (i + 1) % segs;
+        const u0 = i / segs, u1 = (i + 1) / segs;
+        positions.push(...rOutBot[i], ...rOutBot[ni], ...rOutTop[ni]);
+        uvs.push(u0, 0.0, u1, 0.0, u1, 1.0);
+        positions.push(...rOutBot[i], ...rOutTop[ni], ...rOutTop[i]);
+        uvs.push(u0, 0.0, u1, 1.0, u0, 1.0);
+      }
+
+      // Top annular rim
+      for (let i = 0; i < segs; i++) {
+        const ni = (i + 1) % segs;
+        const u0 = i / segs, u1 = (i + 1) / segs;
+        positions.push(...rOutTop[i], ...rOutTop[ni], ...rInTop[ni]);
+        uvs.push(u0, 0.95, u1, 0.95, u1, 0.85);
+        positions.push(...rOutTop[i], ...rInTop[ni], ...rInTop[i]);
+        uvs.push(u0, 0.95, u1, 0.85, u0, 0.85);
+      }
+
+      // Bottom annular rim
+      for (let i = 0; i < segs; i++) {
+        const ni = (i + 1) % segs;
+        const u0 = i / segs, u1 = (i + 1) / segs;
+        positions.push(...rInBot[i], ...rInBot[ni], ...rOutBot[ni]);
+        uvs.push(u0, 0.15, u1, 0.15, u1, 0.05);
+        positions.push(...rInBot[i], ...rOutBot[ni], ...rOutBot[i]);
+        uvs.push(u0, 0.15, u1, 0.05, u0, 0.05);
+      }
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geo.computeVertexNormals();
+
+      totalVertices += geo.attributes.position.count;
+      totalTriangles += geo.attributes.position.count / 3;
+
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      allMeshesList.push(mesh);
+      parent.add(mesh);
+      return mesh;
+    }
+
+    function addLimbSegment(parent, p0Arr, p1Arr, r0x, r0z, r1x, r1z, mat) {
+      const p0 = new THREE.Vector3(...p0Arr);
+      const p1 = new THREE.Vector3(...p1Arr);
+      const vec = new THREE.Vector3().subVectors(p1, p0);
+      const L = vec.length();
+      if (L < 1e-5) return;
+      const d = vec.clone().normalize();
+      const up = Math.abs(d.y) > 0.9 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0);
+      const rxV = new THREE.Vector3().crossVectors(up, d).normalize();
+      const rzV = new THREE.Vector3().crossVectors(d, rxV).normalize();
+      const Rseg = new THREE.Matrix4().makeBasis(rxV, d, rzV);
+
+      function ringAt(t, sx, sz) {
+        const c = 0.28;
+        const pts = [
+          [-sx*(1-c), 0,  sz], [ sx*(1-c), 0,  sz],
+          [ sx,       0,  sz*(1-c)], [ sx,  0, -sz*(1-c)],
+          [ sx*(1-c), 0, -sz], [-sx*(1-c), 0, -sz],
+          [-sx,       0, -sz*(1-c)], [-sx,  0,  sz*(1-c)],
+        ];
+        const center = [
+          p0.x * (1 - t) + p1.x * t,
+          p0.y * (1 - t) + p1.y * t,
+          p0.z * (1 - t) + p1.z * t
+        ];
+        return pts.map(p => applyPointTransform(p, Rseg, center));
+      }
+
+      const slices = [
+        ringAt(0.00, r0x * 0.85, r0z * 0.85),
+        ringAt(0.08, r0x,        r0z),
+        ringAt(0.92, r1x,        r1z),
+        ringAt(1.00, r1x * 0.85, r1z * 0.85),
+      ];
+      const geo = buildLoftGeometry(slices, true, true);
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      const edgesGeo = new THREE.EdgesGeometry(geo, 28);
+      const line = new THREE.LineSegments(edgesGeo, edgeHighlightMat);
+      mesh.add(line);
+      edgeLinesList.push(line);
+      allMeshesList.push(mesh);
+      parent.add(mesh);
+      return mesh;
+    }
+
+    // =========================================================================
+    // 3. THREE.JS SCENE, MATERIALS & FULL ARTICULATED DREADNOUGHT RIG
+    // =========================================================================
+    const canvas = document.getElementById('threeCanvas');
+    const container = document.getElementById('viewportContainer');
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x9ca3af);
+    scene.fog = new THREE.FogExp2(0x9ca3af, 0.025);
+
+    const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+
+    const ambientLight = new THREE.HemisphereLight(0xdbeafe, 0x334155, 0.85);
+    scene.add(ambientLight);
+
+    const keyLight = new THREE.DirectionalLight(0xfffbeb, 1.45);
+    keyLight.position.set(-5.5, 8.5, 6.0);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.width = 2048;
+    keyLight.shadow.mapSize.height = 2048;
+    keyLight.shadow.camera.near = 1;
+    keyLight.shadow.camera.far = 25;
+    const d = 4.2;
+    keyLight.shadow.camera.left = -d;
+    keyLight.shadow.camera.right = d;
+    keyLight.shadow.camera.top = d;
+    keyLight.shadow.camera.bottom = -d;
+    keyLight.shadow.bias = -0.0005;
+    scene.add(keyLight);
+
+    const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.65);
+    fillLight.position.set(6.5, 3.5, 5.5);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.DirectionalLight(0xfdba74, 0.85);
+    rimLight.position.set(0.5, 6.0, -7.0);
+    scene.add(rimLight);
+
+    const floorGeo = new THREE.CircleGeometry(14, 64);
+    floorGeo.rotateX(-Math.PI / 2);
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x828994, roughness: 0.85, metalness: 0.1 });
+    const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+    floorMesh.position.y = -1.94;
+    floorMesh.receiveShadow = true;
+    scene.add(floorMesh);
+
+    const gridHelper = new THREE.GridHelper(14, 24, 0x475569, 0x64748b);
+    gridHelper.position.y = -1.935;
+    scene.add(gridHelper);
+
+    // =========================================================================
+    // 100% IN-MEMORY PROCEDURAL PBR TEXTURES (HTML5 CANVAS 2D API)
+    // Instant generation, zero external base64 strings, zero crash risk!
+    // =========================================================================
+
+    function createProceduralTextures() {
+      // 1. TOPOLOGY-CONFORMAL ARMOR PLATE TEXTURE (1024x1024)
+      // Designed so u wraps perimeter and v flows along plate height!
+      // Seams, bolts, and chamfers precisely follow every curve and edge!
+      const cAlb = document.createElement('canvas');
+      cAlb.width = 1024; cAlb.height = 1024;
+      const ctxA = cAlb.getContext('2d');
+
+      // Base military olive-drab tactical armor
+      ctxA.fillStyle = '#444f3d';
+      ctxA.fillRect(0, 0, 1024, 1024);
+
+      // Fine metal grain & cast armor micro-stippling
+      for (let i = 0; i < 2000; i++) {
+        const y = Math.random() * 1024;
+        const x = Math.random() * 1024;
+        ctxA.fillStyle = Math.random() > 0.5 ? 'rgba(255, 255, 255, 0.035)' : 'rgba(0, 0, 0, 0.055)';
+        ctxA.fillRect(x, y, 2 + Math.random() * 8, 1);
+      }
+
+      // 2. PROCEDURAL 3D BUMP RELIEF MAP
+      const cBmp = document.createElement('canvas');
+      cBmp.width = 1024; cBmp.height = 1024;
+      const ctxB = cBmp.getContext('2d');
+      ctxB.fillStyle = '#808080'; // 128 neutral
+      ctxB.fillRect(0, 0, 1024, 1024);
+
+      // --- VERTICAL PANEL SECTIONS (4 Main Facets + 4 Corner Chamfers) ---
+      // For an 8-sided block, facet seams fall at u = 0.0, 0.25, 0.50, 0.75
+      const vSeams = [0.0, 0.25, 0.50, 0.75, 1.0];
+      vSeams.forEach((uNorm) => {
+        const sx = uNorm * 1024;
+        // Deep vertical seam groove
+        ctxA.fillStyle = '#161d14';
+        ctxA.fillRect(sx - 3, 0, 6, 1024);
+
+        ctxB.fillStyle = '#202020'; // deep seam cut
+        ctxB.fillRect(sx - 3, 0, 6, 1024);
+
+        // Chipped bare metal edge highlights running vertically along facet bends
+        ctxA.fillStyle = '#9cb095';
+        ctxA.fillRect(sx + 3, 0, 2, 1024);
+        ctxA.fillRect(sx - 5, 0, 2, 1024);
+
+        ctxB.fillStyle = '#a8a8a8';
+        ctxB.fillRect(sx + 3, 0, 2, 1024);
+        ctxB.fillRect(sx - 5, 0, 2, 1024);
+      });
+
+      // --- HORIZONTAL CONTOUR FRAMING (Top & Bottom Chamfer Borders) ---
+      // Bottom Chamfer Zone (v = 0.00..0.12)
+      // Top Chamfer Zone (v = 0.88..1.00)
+      const hBorders = [
+        { ySeam: 18,   yHighlight: 36,  yBolts: 64,  isTop: false },
+        { ySeam: 1006, yHighlight: 988, yBolts: 960, isTop: true }
+      ];
+
+      hBorders.forEach(({ ySeam, yHighlight, yBolts, isTop }) => {
+        // Deep horizontal seam groove
+        ctxA.fillStyle = '#161d14';
+        ctxA.fillRect(0, ySeam - 3, 1024, 6);
+
+        ctxB.fillStyle = '#202020';
+        ctxB.fillRect(0, ySeam - 3, 1024, 6);
+
+        // Scalloped weld seam beads along the horizontal joint
+        const wStep = 10;
+        for (let wx = 8; wx < 1024; wx += wStep) {
+          ctxB.fillStyle = '#dcdcdc';
+          ctxB.beginPath(); ctxB.arc(wx, ySeam, 4.5, 0, Math.PI * 2); ctxB.fill();
+          ctxB.strokeStyle = '#383838'; ctxB.lineWidth = 1;
+          ctxB.beginPath(); ctxB.arc(wx, ySeam, 4.5, 0, Math.PI); ctxB.stroke();
+
+          ctxA.fillStyle = '#6e7e65';
+          ctxA.beginPath(); ctxA.arc(wx, ySeam, 4.5, 0, Math.PI * 2); ctxA.fill();
+          ctxA.fillStyle = '#92a387';
+          ctxA.beginPath(); ctxA.arc(wx - 1, ySeam - 1, 2.5, 0, Math.PI * 2); ctxA.fill();
+        }
+
+        // Chipped worn-metal edge highlight along beveled chamfer
+        ctxA.fillStyle = '#9cb095';
+        ctxA.fillRect(0, yHighlight - 1.5, 1024, 3);
+
+        ctxB.fillStyle = '#aaaaaa';
+        ctxB.fillRect(0, yHighlight - 1.5, 1024, 3);
+
+        // Regular perimeter bolts that follow the model contour
+        const boltSpacing = 32;
+        const bRad = 4.5;
+        for (let bx = 16; bx < 1024; bx += boltSpacing) {
+          // Skip if right on a vertical seam
+          if (bx % 256 < 12 || bx % 256 > 244) continue;
+
+          // Bump map: raised bolt head with shadow recess
+          ctxB.fillStyle = '#1c1c1c';
+          ctxB.beginPath(); ctxB.arc(bx, yBolts, bRad + 1.5, 0, Math.PI * 2); ctxB.fill();
+          ctxB.fillStyle = '#f5f5f5';
+          ctxB.beginPath(); ctxB.arc(bx - 0.5, yBolts - 0.5, bRad, 0, Math.PI * 2); ctxB.fill();
+
+          // Albedo: dark recess, metallic hex bolt head & specular glint
+          ctxA.fillStyle = '#121811';
+          ctxA.beginPath(); ctxA.arc(bx, yBolts, bRad + 1.5, 0, Math.PI * 2); ctxA.fill();
+          ctxA.fillStyle = '#b6c6ac';
+          ctxA.beginPath(); ctxA.arc(bx, yBolts, bRad, 0, Math.PI * 2); ctxA.fill();
+          ctxA.strokeStyle = '#2b3626'; ctxA.lineWidth = 1.2;
+          ctxA.beginPath(); ctxA.moveTo(bx - 2.5, yBolts); ctxA.lineTo(bx + 2.5, yBolts); ctxA.stroke();
+          ctxA.fillStyle = '#ffffff';
+          ctxA.beginPath(); ctxA.arc(bx - 1.2, yBolts - 1.2, 1.4, 0, Math.PI * 2); ctxA.fill();
+        }
+      });
+
+      // --- MID-BODY REINFORCED RIBS & STAMPINGS (Center of plate, v = 0.20..0.80) ---
+      // 4 Main Plate Centers: u = 128 (Front), 384 (Right), 640 (Back), 896 (Left)
+      [128, 384, 640, 896].forEach((cx, idx) => {
+        // Embossed horizontal reinforcement ribs that follow the armor contour
+        for (let ry = 360; ry <= 660; ry += 70) {
+          // Indented rib groove on bump
+          ctxB.fillStyle = '#404040';
+          ctxB.fillRect(cx - 70, ry - 3, 140, 6);
+          ctxB.fillStyle = '#a0a0a0';
+          ctxB.fillRect(cx - 70, ry + 3, 140, 2);
+
+          // Dark shadow & light edge on albedo
+          ctxA.fillStyle = '#222b1f';
+          ctxA.fillRect(cx - 70, ry - 3, 140, 6);
+          ctxA.fillStyle = '#839679';
+          ctxA.fillRect(cx - 70, ry + 3, 140, 2);
+        }
+
+        // Center Stencils on Front (idx 0) and Back (idx 2)
+        if (idx === 0) {
+          ctxA.font = 'bold 22px monospace';
+          ctxA.fillStyle = '#f1f5ec';
+          ctxA.fillText('MK-IV', cx - 35, 480);
+          ctxA.font = 'bold 13px monospace';
+          ctxA.fillStyle = '#f59e0b';
+          ctxA.fillText('ARMOR 46100', cx - 45, 510);
+        } else if (idx === 2) {
+          ctxA.font = 'bold 15px monospace';
+          ctxA.fillStyle = '#d4e0ce';
+          ctxA.fillText('VENT // HOT', cx - 45, 490);
+        }
+      });
+
+      // 3. WEATHERED HAZARD STRIPES (pauldrons & skirts)
+      const cHaz = document.createElement('canvas');
+      cHaz.width = 512; cHaz.height = 512;
+      const ctxH = cHaz.getContext('2d');
+      ctxH.fillStyle = '#d97706';
+      ctxH.fillRect(0, 0, 512, 512);
+
+      ctxH.fillStyle = '#1c2026';
+      ctxH.beginPath();
+      const stripeW = 44;
+      for (let x = -512; x < 1024; x += stripeW * 2) {
+        ctxH.moveTo(x, 0);
+        ctxH.lineTo(x + stripeW, 0);
+        ctxH.lineTo(x + stripeW - 512, 512);
+        ctxH.lineTo(x - 512, 512);
+        ctxH.closePath();
+      }
+      ctxH.fill();
+
+      for (let i = 0; i < 90; i++) {
+        const gx = Math.random() * 512, gy = Math.random() * 512;
+        ctxH.fillStyle = Math.random() > 0.5 ? 'rgba(28, 32, 38, 0.45)' : 'rgba(217, 119, 6, 0.35)';
+        ctxH.fillRect(gx, gy, 4 + Math.random() * 12, 2 + Math.random() * 6);
+      }
+
+      ctxH.font = 'bold 16px monospace';
+      ctxH.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctxH.fillText('CAUTION // PINCH HAZARD', 70, 240);
+
+      // 4. SQUAD BADGE
+      const cBdg = document.createElement('canvas');
+      cBdg.width = 512; cBdg.height = 256;
+      const ctxD = cBdg.getContext('2d');
+      ctxD.fillStyle = '#181e26';
+      ctxD.fillRect(0, 0, 512, 256);
+      ctxD.strokeStyle = '#f59e0b'; ctxD.lineWidth = 4;
+      ctxD.strokeRect(6, 6, 500, 244);
+      ctxD.strokeStyle = '#64748b'; ctxD.lineWidth = 1.5;
+      ctxD.strokeRect(14, 14, 484, 228);
+
+      ctxD.fillStyle = '#f59e0b'; ctxD.font = 'bold 38px monospace';
+      ctxD.fillText('MK-IV TITAN', 130, 72);
+      ctxD.font = 'bold 19px monospace';
+      ctxD.fillText('HEAVY SIEGE DREADNOUGHT // SQ-04', 132, 118);
+      ctxD.fillStyle = '#94a3b8'; ctxD.font = '13px monospace';
+      ctxD.fillText('SERIAL: DN-8842-AX  |  ARMOR: COMPOSITE TITANIUM-B', 32, 198);
+
+      ctxD.fillStyle = '#f59e0b';
+      ctxD.beginPath();
+      ctxD.moveTo(35, 42); ctxD.lineTo(62, 42); ctxD.lineTo(84, 82); ctxD.lineTo(62, 122); ctxD.lineTo(35, 122); ctxD.lineTo(57, 82); ctxD.closePath();
+      ctxD.fill();
+      ctxD.beginPath();
+      ctxD.moveTo(68, 42); ctxD.lineTo(95, 42); ctxD.lineTo(117, 82); ctxD.lineTo(95, 122); ctxD.lineTo(68, 122); ctxD.lineTo(90, 82); ctxD.closePath();
+      ctxD.fill();
+
+      // 5. ENERGY SHIELD
+      const cShd = document.createElement('canvas');
+      cShd.width = 512; cShd.height = 512;
+      const ctxS = cShd.getContext('2d');
+      ctxS.fillStyle = '#000000';
+      ctxS.fillRect(0, 0, 512, 512);
+      ctxS.strokeStyle = '#00f0ff';
+      ctxS.lineWidth = 3;
+      const hR = 36;
+      const hH = hR * Math.sqrt(3);
+      for (let y = -hH; y < 512 + hH; y += hH) {
+        for (let x = -hR * 3; x < 512 + hR * 3; x += hR * 3) {
+          function drawHex(hx, hy) {
+            ctxS.beginPath();
+            for (let a = 0; a < 6; a++) {
+              const ang = (a * Math.PI) / 3;
+              const px = hx + hR * Math.cos(ang);
+              const py = hy + hR * Math.sin(ang);
+              if (a === 0) ctxS.moveTo(px, py);
+              else ctxS.lineTo(px, py);
+            }
+            ctxS.closePath();
+            ctxS.stroke();
+          }
+          drawHex(x, y);
+          drawHex(x + hR * 1.5, y + hH * 0.5);
+        }
+      }
+
+      // Three.js CanvasTextures: Repeat 1.0 (Exact 1:1 mapping to each component topology!)
+      const tAlb = new THREE.CanvasTexture(cAlb);
+      tAlb.wrapS = THREE.RepeatWrapping;
+      tAlb.wrapT = THREE.ClampToEdgeWrapping;
+      tAlb.repeat.set(1.0, 1.0);
+
+      const tBmp = new THREE.CanvasTexture(cBmp);
+      tBmp.wrapS = THREE.RepeatWrapping;
+      tBmp.wrapT = THREE.ClampToEdgeWrapping;
+      tBmp.repeat.set(1.0, 1.0);
+
+      const tHaz = new THREE.CanvasTexture(cHaz);
+      tHaz.wrapS = tHaz.wrapT = THREE.RepeatWrapping;
+      tHaz.repeat.set(2.0, 2.0);
+
+      const tBdg = new THREE.CanvasTexture(cBdg);
+
+      const tShd = new THREE.CanvasTexture(cShd);
+      tShd.wrapS = tShd.wrapT = THREE.RepeatWrapping;
+
+      return { tAlb, tBmp, tHaz, tBdg, tShd };
+    }    const { tAlb: texSeamsAlb, tBmp: texSeamsBmp, tHaz: texHazard, tBdg: texBadge, tShd: texShield } = createProceduralTextures();
+
+    // AAA PBR Materials Palette with 3D Indented Seams, Micro-Rivets & Weathered Edge Wear
+    const MATS = {
+      // Primary Armor: Military Olive-Drab with recessed weld seams, rivets & bump depth
+      armorSlate:  new THREE.MeshStandardMaterial({
+        map: texSeamsAlb,
+        bumpMap: texSeamsBmp,
+        bumpScale: 0.065,
+        color: 0x8a9c82,
+        metalness: 0.58,
+        roughness: 0.38
+      }),
+      // Secondary Reinforced Armor: Darker olive-green with matching seams
+      armorMid:    new THREE.MeshStandardMaterial({
+        map: texSeamsAlb,
+        bumpMap: texSeamsBmp,
+        bumpScale: 0.060,
+        color: 0x76856f,
+        metalness: 0.62,
+        roughness: 0.34
+      }),
+      // Heavy Cast Steel Chassis & Internal Actuators
+      steelDark:   new THREE.MeshStandardMaterial({
+        bumpMap: texSeamsBmp,
+        bumpScale: 0.030,
+        color: 0x222822,
+        metalness: 0.86,
+        roughness: 0.26
+      }),
+      // Machined Chrome Pistons & Hinge Rods
+      steelChrome: new THREE.MeshStandardMaterial({
+        color: 0xa4b0a0,
+        metalness: 0.95,
+        roughness: 0.15
+      }),
+      // Weathered Caution Hazard Stripes on Pauldrons & Armor Skirts
+      accentOrange:new THREE.MeshStandardMaterial({
+        map: texHazard,
+        bumpMap: texSeamsBmp,
+        bumpScale: 0.040,
+        color: 0xffffff,
+        metalness: 0.45,
+        roughness: 0.36
+      }),
+      // Squad 04 Military Stencil Nameplate
+      chestBadge:  new THREE.MeshStandardMaterial({
+        map: texBadge,
+        color: 0xffffff,
+        metalness: 0.35,
+        roughness: 0.40
+      }),
+      // Reactor Core Amber Glow
+      glowAmber:   new THREE.MeshStandardMaterial({
+        color: 0xff9419,
+        emissive: 0xff7b00,
+        emissiveIntensity: 2.2,
+        roughness: 0.2
+      }),
+      // Primary Sensor Eye: Menacing Ruby-Red Optical Lens
+      glowRuby:    new THREE.MeshStandardMaterial({
+        color: 0xff2244,
+        emissive: 0xff002b,
+        emissiveIntensity: 2.8,
+        roughness: 0.15
+      }),
+      // Auxiliary Sensor Cyan Glow
+      glowCyan:    new THREE.MeshStandardMaterial({
+        color: 0x7aeaff,
+        emissive: 0x00d8ff,
+        emissiveIntensity: 2.2,
+        roughness: 0.2
+      }),
+      // Dark Optical Sensor Glass
+      darkGlass:   new THREE.MeshStandardMaterial({
+        color: 0x111612,
+        metalness: 0.92,
+        roughness: 0.08
+      }),
+    };
+
+    const edgeHighlightMat = new THREE.LineBasicMaterial({
+      color: 0x94a3b8,
+      transparent: true,
+      opacity: 0.32
+    });
+
+    const rig = {
+      root: new THREE.Group(),
+      pelvis: new THREE.Group(),
+      torso: new THREE.Group(),
+      sensorPod: new THREE.Group(),
+      reactorL: new THREE.Group(),
+      reactorR: new THREE.Group(),
+      shoulderL: new THREE.Group(),
+      shoulderR: new THREE.Group(),
+      hatchTopL: new THREE.Group(),
+      hatchSideL: new THREE.Group(),
+      hatchTopR: new THREE.Group(),
+      hatchSideR: new THREE.Group(),
+      armL: new THREE.Group(),
+      elbowL: new THREE.Group(),
+      railBarrelGroup: new THREE.Group(),
+      armR: new THREE.Group(),
+      elbowR: new THREE.Group(),
+      wristChuck: new THREE.Group(),
+      clawJaws: [],
+      shieldDome: null,
+      legL: new THREE.Group(),
+      kneeL: new THREE.Group(),
+      ankleL: new THREE.Group(),
+      legR: new THREE.Group(),
+      kneeR: new THREE.Group(),
+      ankleR: new THREE.Group(),
+    };
+
+    scene.add(rig.root);
+
+    function createLocalPartGroup(parent, pivotArr, buildFn) {
+      const joint = new THREE.Group();
+      joint.position.set(pivotArr[0], pivotArr[1], pivotArr[2]);
+      parent.add(joint);
+
+      const offsetGroup = new THREE.Group();
+      offsetGroup.position.set(-pivotArr[0], -pivotArr[1], -pivotArr[2]);
+      joint.add(offsetGroup);
+      buildFn(offsetGroup);
+      return joint;
+    }
+
+    function buildDreadnoughtModel() {
+      // 4 Main Quadrant UV Atlas Island Boundaries:
+       // Central optic & stencil badge island
+
+      // 1. PELVIS
+      rig.pelvis = createLocalPartGroup(rig.root, [0, 0, 0], (g) => {
+        addBeveledBlock(g, 0.84, 0.44, 0.78, { chamfer: 0.06, taperTop: [1.12, 1.05], center: [0, -0.04, 0], mat: MATS.steelDark });
+        addBeveledBlock(g, 0.42, 0.56, 0.34, { chamfer: 0.05, taperTop: [1.18, 1.08], taperFront: 0.82, center: [0, -0.10, 0.34], R: rotXMat(0.08), mat: MATS.armorSlate });
+        addBeveledBlock(g, 0.46, 0.14, 0.36, { chamfer: 0.03, taperFront: 0.85, center: [0, 0.16, 0.36], R: rotXMat(-0.18), mat: MATS.armorMid });
+        addBeveledBlock(g, 0.10, 0.26, 0.06, { chamfer: 0.01, center: [0, -0.14, 0.50], R: rotXMat(0.08), mat: MATS.darkGlass });
+
+        for (const sx of [-1, 1]) {
+          addBeveledBlock(g, 0.24, 0.36, 0.58, { chamfer: 0.04, center: [sx * 0.44, 0.04, 0.08], R: rotZMat(-sx * 0.32), mat: MATS.armorMid });
+          addBeveledBlock(g, 0.10, 0.16, 0.22, { chamfer: 0.02, center: [sx * 0.46, 0.02, 0.26], R: rotZMat(-sx * 0.32), mat: MATS.accentOrange });
+          addCylinderPart(g, 0.22, 0.22, 0.38, { segs: 24, bevel: 0.02, center: [sx * 0.52, -0.12, 0], axis: 'x', mat: MATS.steelDark });
+          addCylinderPart(g, 0.15, 0.15, 0.48, { segs: 20, bevel: 0.015, center: [sx * 0.54, -0.12, 0], axis: 'x', mat: MATS.steelChrome });
+          addCylinderPart(g, 0.055, 0.055, 0.44, { segs: 14, bevel: 0.005, center: [sx * 0.40, 0.24, 0.18], axis: 'y', R: rotZMat(sx * 0.24), mat: MATS.steelChrome });
+          addCylinderPart(g, 0.075, 0.075, 0.22, { segs: 14, bevel: 0.008, center: [sx * 0.44, 0.14, 0.18], axis: 'y', R: rotZMat(sx * 0.24), mat: MATS.steelDark });
+        }
+        addCylinderPart(g, 0.38, 0.42, 0.34, { segs: 28, bevel: 0.02, center: [0, 0.26, 0], axis: 'y', mat: MATS.steelDark });
+      });
+
+      // 2. TORSO
+      rig.torso = createLocalPartGroup(rig.pelvis, [0, 0.32, 0], (g) => {
+        addBeveledBlock(g, 1.42, 0.96, 1.18, { chamfer: 0.12, taperTop: [1.06, 0.92], taperFront: 0.76, center: [0, 0.84, -0.02], mat: MATS.armorSlate });
+        addBeveledBlock(g, 0.92, 0.34, 0.56, { chamfer: 0.06, taperTop: [1.22, 1.15], taperFront: 0.72, center: [0, 0.42, 0.34], R: rotXMat(-0.48), mat: MATS.armorSlate });
+        addBeveledBlock(g, 0.46, 0.14, 0.12, { chamfer: 0.02, center: [0, 0.36, 0.58], R: rotXMat(-0.35), mat: MATS.steelDark });
+
+        addBeveledBlock(g, 0.86, 0.42, 0.44, { chamfer: 0.06, taperTop: [0.86, 0.90], taperFront: 0.78, center: [0, 0.78, 0.48], R: rotXMat(0.42), mat: MATS.armorMid });
+        addBeveledBlock(g, 0.88, 0.32, 0.40, { chamfer: 0.05, taperTop: [1.08, 1.05], taperFront: 0.80, center: [0, 0.56, 0.52], R: rotXMat(-0.28), mat: MATS.armorSlate });
+        addBeveledBlock(g, 0.32, 0.15, 0.06, { chamfer: 0.015, taperTop: [1.15, 1.0], center: [0, 0.68, 0.69], R: rotXMat(0.12), mat: MATS.steelDark });
+        addBeveledBlock(g, 0.26, 0.10, 0.04, { chamfer: 0.01, taperTop: [1.15, 1.0], center: [0, 0.68, 0.71], R: rotXMat(0.12), mat: MATS.chestBadge });
+
+        for (const sx of [-1, 1]) {
+          const Rchk = rotYMat(sx * 0.42).multiply(rotXMat(0.10));
+          const chkC = [sx * 0.52, 0.68, 0.44];
+          addBeveledBlock(g, 0.44, 0.52, 0.42, { chamfer: 0.06, taperTop: [0.90, 0.92], center: chkC, R: Rchk, mat: MATS.armorSlate });
+          const bezC = applyPointTransform([0, -0.02, 0.19], Rchk, chkC);
+          addBeveledBlock(g, 0.24, 0.26, 0.06, { chamfer: 0.03, center: bezC, R: Rchk, mat: MATS.armorMid });
+          const portC = applyPointTransform([0, -0.02, 0.21], Rchk, chkC);
+          addTubePart(g, 0.088, 0.055, 0.06, { segs: 20, center: portC, axis: 'z', R: Rchk, mat: MATS.steelDark });
+          addCylinderPart(g, 0.055, 0.055, 0.03, { segs: 16, bevel: 0.002, center: portC, axis: 'z', R: Rchk, mat: MATS.darkGlass });
+          addTubePart(g, 0.042, 0.028, 0.035, { segs: 16, center: portC, axis: 'z', R: Rchk, mat: MATS.accentOrange });
+
+          const Rcol = rotZMat(-sx * 0.22).multiply(rotXMat(0.18));
+          addBeveledBlock(g, 0.38, 0.38, 0.58, { chamfer: 0.05, taperTop: [0.85, 0.88], center: [sx * 0.48, 1.18, 0.22], R: Rcol, mat: MATS.armorMid });
+          addBeveledBlock(g, 0.14, 0.14, 0.08, { chamfer: 0.02, center: [sx * 0.44, 1.20, 0.48], R: Rcol, mat: MATS.steelDark });
+          addBeveledBlock(g, 0.09, 0.09, 0.09, { chamfer: 0.01, center: [sx * 0.44, 1.20, 0.48], R: Rcol, mat: MATS.darkGlass });
+
+          addCylinderPart(g, 0.36, 0.36, 0.28, { segs: 28, bevel: 0.02, center: [sx * 0.76, 0.94, -0.02], axis: 'x', mat: MATS.steelDark });
+          addTubePart(g, 0.39, 0.34, 0.08, { segs: 28, center: [sx * 0.72, 0.94, -0.02], axis: 'x', mat: MATS.accentOrange });
+        }
+
+        // Armored neck turret ring supporting the rotating head pod
+        addCylinderPart(g, 0.28, 0.30, 0.14, { segs: 24, bevel: 0.015, center: [0, 0.96, 0.30], axis: 'y', mat: MATS.steelDark });
+
+        addBeveledBlock(g, 1.12, 0.88, 0.44, { chamfer: 0.09, taperTop: [0.90, 0.88], center: [0, 0.84, -0.64], mat: MATS.armorMid });
+        for (let i = 0; i < 5; i++) {
+          addBeveledBlock(g, 0.68, 0.06, 0.12, { chamfer: 0.01, center: [0, 0.56 + i * 0.13, -0.86], R: rotXMat(0.28), mat: MATS.steelDark });
+        }
+      });
+
+      // 2B. UNIFIED ARTICULATED HEAD & OPTICAL SENSOR TURRET (Cowl + Black Head Base + Faceplate + Lenses move as ONE unit!)
+      rig.sensorPod = createLocalPartGroup(rig.torso.children[0], [0, 1.12, 0.32], (g) => {
+        // Outer armored head cowl / hood
+        addBeveledBlock(g, 0.68, 0.50, 0.58, { chamfer: 0.11, taperTop: [0.76, 0.86], taperFront: 0.84, center: [0, 1.18, 0.28], mat: MATS.armorMid });
+        // Solid black inner head chassis block (unified with faceplate!)
+        addBeveledBlock(g, 0.48, 0.40, 0.36, { chamfer: 0.08, taperTop: [0.82, 0.90], center: [0, 1.15, 0.42], mat: MATS.darkGlass });
+        // Orange & dark steel sensor faceplate mounted flush into the black head base
+        addBeveledBlock(g, 0.38, 0.32, 0.14, { chamfer: 0.07, taperTop: [0.85, 0.95], center: [0, 1.15, 0.53], mat: MATS.accentOrange });
+        addBeveledBlock(g, 0.31, 0.26, 0.15, { chamfer: 0.05, taperTop: [0.85, 0.95], center: [0, 1.15, 0.54], mat: MATS.steelDark });
+        const lensSpecs = [
+          [ 0.00,  1.08, 0.61, 0.068],
+          [-0.085, 1.19, 0.61, 0.048],
+          [ 0.085, 1.19, 0.61, 0.048],
+          [ 0.00,  1.22, 0.61, 0.032],
+        ];
+        for (const [lx, ly, lz, lr] of lensSpecs) {
+          addTubePart(g, lr * 1.35, lr * 1.05, 0.05, { segs: 20, center: [lx, ly, lz], axis: 'z', mat: MATS.accentOrange });
+          addTubePart(g, lr * 1.05, lr * 0.78, 0.06, { segs: 20, center: [lx, ly, lz + 0.005], axis: 'z', mat: MATS.steelDark });
+          addCylinderPart(g, lr * 0.80, lr * 0.80, 0.03, { segs: 18, bevel: 0.002, center: [lx, ly, lz], axis: 'z', mat: MATS.darkGlass });
+          addTubePart(g, lr * 0.68, lr * 0.35, 0.035, { segs: 18, center: [lx, ly, lz + 0.01], axis: 'z', mat: MATS.glowAmber });
+        }
+      });
+
+      // 2C. TWIN SPINNING FUSION TURBINE REACTORS
+      [[-1, 'reactorR'], [1, 'reactorL']].forEach(([sx, key]) => {
+        const rx = sx * 0.38, ry = 1.54, rz = -0.22;
+        rig[key] = createLocalPartGroup(rig.torso.children[0], [rx, ry, rz], (g) => {
+          addCylinderPart(g, 0.23, 0.21, 0.18, { segs: 24, bevel: 0.015, center: [rx, ry - 0.10, rz], axis: 'y', mat: MATS.steelDark });
+          addCylinderPart(g, 0.175, 0.175, 0.18, { segs: 20, bevel: 0.005, center: [rx, ry + 0.05, rz], axis: 'y', mat: MATS.glowAmber });
+          for (const rOff of [-0.02, 0.04, 0.10, 0.15]) {
+            addTubePart(g, 0.195, 0.165, 0.022, { segs: 20, center: [rx, ry + rOff, rz], axis: 'y', mat: MATS.steelDark });
+          }
+          for (let bi = 0; bi < 12; bi++) {
+            const ang = (bi / 12) * Math.PI * 2;
+            const bx = rx + 0.185 * Math.cos(ang), bz = rz + 0.185 * Math.sin(ang);
+            addCylinderPart(g, 0.016, 0.016, 0.20, { segs: 8, bevel: 0.002, center: [bx, ry + 0.05, bz], axis: 'y', mat: MATS.steelDark });
+          }
+          addTubePart(g, 0.21, 0.13, 0.08, { segs: 24, center: [rx, ry + 0.17, rz], axis: 'y', mat: MATS.armorMid });
+        });
+      });
+
+      // 3. SHOULDERS & HEX MISSILE PODS
+      [['L', 1], ['R', -1]].forEach(([side, sx]) => {
+        const Rsh = rotZMat(-sx * 0.20);
+        const shC = [sx * 1.12, 0.92, -0.02];
+        const Rpod = rotZMat(-sx * 0.12);
+        const podC = [sx * 1.04, 1.38, 0.02];
+
+        rig[`shoulder${side}`] = createLocalPartGroup(rig.torso.children[0], [sx * 0.76, 0.94, 0], (g) => {
+          addBeveledBlock(g, 0.58, 0.56, 0.78, { chamfer: 0.08, taperTop: [0.78, 0.86], center: shC, R: Rsh, mat: MATS.armorSlate });
+          const skirtC = applyPointTransform([sx * 0.04, -0.24, 0], Rsh, shC);
+          addBeveledBlock(g, 0.62, 0.16, 0.80, { chamfer: 0.03, center: skirtC, R: Rsh, mat: MATS.armorMid });
+          const stripeC = applyPointTransform([sx * 0.28, -0.22, 0.12], Rsh, shC);
+          addBeveledBlock(g, 0.08, 0.10, 0.36, { chamfer: 0.01, center: stripeC, R: Rsh, mat: MATS.accentOrange });
+
+          for (const sz of [-1, 1]) {
+            const embC = applyPointTransform([-sx * 0.04, 0.02, sz * 0.38], Rsh, shC);
+            addTubePart(g, 0.115, 0.085, 0.05, { segs: 20, center: embC, axis: 'z', R: Rsh, mat: MATS.steelDark });
+            addCylinderPart(g, 0.080, 0.080, 0.04, { segs: 18, bevel: 0.005, center: embC, axis: 'z', R: Rsh, mat: MATS.armorMid });
+          }
+
+          addBeveledBlock(g, 0.46, 0.44, 0.68, { chamfer: 0.09, center: podC, R: Rpod, mat: MATS.armorSlate });
+          const fBez = applyPointTransform([0, 0, 0.32], Rpod, podC);
+          addBeveledBlock(g, 0.42, 0.40, 0.08, { chamfer: 0.07, center: fBez, R: Rpod, mat: MATS.armorMid });
+          const fIn = applyPointTransform([0, 0, 0.34], Rpod, podC);
+          addBeveledBlock(g, 0.35, 0.33, 0.06, { chamfer: 0.05, center: fIn, R: Rpod, mat: MATS.darkGlass });
+
+          const offsets = [[0, 0]];
+          for (let k = 0; k < 6; k++) offsets.push([0.105 * Math.cos(k * Math.PI / 3), 0.105 * Math.sin(k * Math.PI / 3)]);
+          for (const [ox, oy] of offsets) {
+            const tPos = applyPointTransform([ox, oy, 0.35], Rpod, podC);
+            addTubePart(g, 0.044, 0.034, 0.06, { segs: 16, center: tPos, axis: 'z', R: Rpod, mat: MATS.steelDark });
+            const wPos = applyPointTransform([ox, oy, 0.36], Rpod, podC);
+            addCylinderPart(g, 0.022, 0.008, 0.03, { segs: 12, bevel: 0.002, center: wPos, axis: 'z', R: Rpod, mat: MATS.accentOrange });
+          }
+        });
+
+        const topHinge = applyPointTransform([0, 0.21, 0.34], Rpod, podC);
+        rig[`hatchTop${side}`] = createLocalPartGroup(rig[`shoulder${side}`].children[0], topHinge, (g) => {
+          const hc = applyPointTransform([0, 0.31, 0.34], Rpod, podC);
+          const Rh = Rpod.clone().multiply(rotXMat(-1.18));
+          addBeveledBlock(g, 0.36, 0.04, 0.26, { chamfer: 0.01, center: hc, R: Rh, mat: MATS.armorMid });
+        });
+
+        const sideHinge = applyPointTransform([sx * 0.21, 0, 0.34], Rpod, podC);
+        rig[`hatchSide${side}`] = createLocalPartGroup(rig[`shoulder${side}`].children[0], sideHinge, (g) => {
+          const sc = applyPointTransform([sx * 0.31, 0, 0.34], Rpod, podC);
+          const Rs = Rpod.clone().multiply(rotYMat(sx * 1.18));
+          addBeveledBlock(g, 0.04, 0.32, 0.24, { chamfer: 0.01, center: sc, R: Rs, mat: MATS.armorMid });
+        });
+      });
+
+      // 4. RIGHT ARM (-X): FOREARM, ENERGY SHIELD & 3-CLAW CRUSHER
+      const ax = -1.16;
+      rig.armR = createLocalPartGroup(rig.torso.children[0], [-1.14, 0.62, 0], (g) => {
+        addCylinderPart(g, 0.16, 0.15, 0.44, { segs: 20, bevel: 0.01, center: [ax, 0.42, -0.02], axis: 'y', mat: MATS.steelDark });
+        addBeveledBlock(g, 0.36, 0.34, 0.40, { chamfer: 0.05, center: [ax, 0.42, -0.02], R: rotZMat(0.08), mat: MATS.armorSlate });
+        addBeveledBlock(g, 0.38, 0.08, 0.42, { chamfer: 0.015, center: [ax, 0.30, -0.02], R: rotZMat(0.08), mat: MATS.accentOrange });
+        addCylinderPart(g, 0.19, 0.19, 0.40, { segs: 24, bevel: 0.02, center: [ax - 0.02, 0.12, 0], axis: 'x', mat: MATS.steelDark });
+        addCylinderPart(g, 0.12, 0.12, 0.44, { segs: 20, bevel: 0.01, center: [ax - 0.02, 0.12, 0], axis: 'x', mat: MATS.steelChrome });
+      });
+
+      const Rfa = rotXMat(0.22).multiply(rotZMat(0.06));
+      const faC = [ax - 0.04, -0.24, 0.08];
+      const chuckC = applyPointTransform([0, -0.37, 0], Rfa, faC);
+
+      rig.elbowR = createLocalPartGroup(rig.armR.children[0], [ax - 0.02, 0.12, 0], (g) => {
+        addCylinderPart(g, 0.26, 0.24, 0.54, { segs: 24, bevel: 0.04, center: faC, axis: 'y', R: Rfa, mat: MATS.armorSlate });
+        addBeveledBlock(g, 0.46, 0.44, 0.48, { chamfer: 0.09, taperTop: [0.90, 0.90], center: faC, R: Rfa, mat: MATS.armorMid });
+        const wristC = applyPointTransform([0, -0.28, 0], Rfa, faC);
+        addTubePart(g, 0.25, 0.19, 0.08, { segs: 24, center: wristC, axis: 'y', R: Rfa, mat: MATS.accentOrange });
+
+        const shC = applyPointTransform([-0.24, 0.02, 0.02], Rfa, faC);
+        addBeveledBlock(g, 0.16, 0.52, 0.30, { chamfer: 0.04, taperTop: [0.80, 0.85], center: shC, R: Rfa, mat: MATS.armorSlate });
+        const shC2 = applyPointTransform([-0.26, 0.06, 0.02], Rfa, faC);
+        addBeveledBlock(g, 0.18, 0.36, 0.22, { chamfer: 0.03, center: shC2, R: Rfa, mat: MATS.armorMid });
+        const cryC = applyPointTransform([-0.28, -0.18, 0.04], Rfa, faC);
+        addBeveledBlock(g, 0.08, 0.24, 0.16, { chamfer: 0.02, taperTop: [1.4, 1.3], center: cryC, R: Rfa.clone().multiply(rotZMat(-0.15)), mat: MATS.glowCyan });
+
+        // Forearm-Mounted Multi-Stage Unfolding Hexagonal Energy Shield (Pushed outward so zero arm/claw geometry pokes through!)
+        const shieldRoot = new THREE.Group();
+        // Mount 0.20m further outward along the crystal emitter normal (-0.53 vs -0.33) so the entire forearm & claw stay behind the shield!
+        const mountPt = applyPointTransform([-0.53, -0.08, 0.10], Rfa, faC);
+        shieldRoot.position.set(mountPt[0], mountPt[1], mountPt[2]);
+        const Rshield = Rfa.clone().multiply(rotYMat(-0.18));
+        shieldRoot.setRotationFromMatrix(Rshield);
+
+        // 1) Stepped Energy Projector Conduit bridging from the forearm crystal (x = +0.20 in shield space) out to the shield plane (x = 0)
+        const hubGeo = new THREE.CylinderGeometry(0.15, 0.24, 0.24, 6);
+        hubGeo.rotateZ(Math.PI / 2);
+        const hubMat = new THREE.MeshStandardMaterial({
+          color: 0x7aeaff,
+          emissive: 0x00e5ff,
+          emissiveIntensity: 2.6,
+          transparent: true,
+          opacity: 0.88,
+          roughness: 0.2
+        });
+        const hubMesh = new THREE.Mesh(hubGeo, hubMat);
+        hubMesh.position.set(0.11, 0, 0);
+        shieldRoot.add(hubMesh);
+
+        // 2) Inner Hexagonal Ring (Stage 1 of deployment)
+        const innerGroup = new THREE.Group();
+        const innerGeo = new THREE.CylinderGeometry(0.46, 0.46, 0.035, 6);
+        innerGeo.rotateZ(Math.PI / 2);
+        const innerWire = new THREE.LineSegments(
+          new THREE.EdgesGeometry(innerGeo),
+          new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 })
+        );
+        innerGroup.add(innerWire);
+        shieldRoot.add(innerGroup);
+
+        // 3) Middle Hexagonal Ring + 6 Radial Energy Spokes (Stage 2 of deployment)
+        const midGroup = new THREE.Group();
+        const midGeo = new THREE.CylinderGeometry(0.82, 0.82, 0.03, 6);
+        midGeo.rotateZ(Math.PI / 2);
+        const midWire = new THREE.LineSegments(
+          new THREE.EdgesGeometry(midGeo),
+          new THREE.LineBasicMaterial({ color: 0x7aeaff, transparent: true, opacity: 0.90 })
+        );
+        midGroup.add(midWire);
+        for (let si = 0; si < 6; si++) {
+          const sa = (si / 6) * Math.PI * 2;
+          const spokeGeo = new THREE.BoxGeometry(0.02, 1.12, 0.025);
+          const spokeMesh = new THREE.Mesh(
+            spokeGeo,
+            new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.75 })
+          );
+          spokeMesh.rotation.x = sa;
+          midGroup.add(spokeMesh);
+        }
+        shieldRoot.add(midGroup);
+
+        // 4) Outer Hexagonal Plasma Barrier Panel (Stage 3 of deployment — right-sized radius 1.18m!)
+        const outerGroup = new THREE.Group();
+        const domeGeo = new THREE.CylinderGeometry(1.18, 1.18, 0.025, 6);
+        domeGeo.rotateZ(Math.PI / 2);
+        const domeMat = new THREE.MeshStandardMaterial({
+          map: texShield,
+          alphaMap: texShield,
+          color: 0x66f6ff,
+          emissiveMap: texShield,
+          emissive: 0x00d8ff,
+          emissiveIntensity: 2.4,
+          transparent: true,
+          opacity: 0.78,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending
+        });
+        const domeMesh = new THREE.Mesh(domeGeo, domeMat);
+        const domeWire = new THREE.LineSegments(
+          new THREE.EdgesGeometry(domeGeo),
+          new THREE.LineBasicMaterial({ color: 0x9ef5ff, transparent: true, opacity: 0.95 })
+        );
+        domeMesh.add(domeWire);
+        outerGroup.add(domeMesh);
+        shieldRoot.add(outerGroup);
+
+        shieldRoot.visible = false;
+        shieldRoot.userData = { hubMesh, innerGroup, midGroup, outerGroup, domeMat };
+        g.add(shieldRoot);
+        rig.shieldDome = shieldRoot;
+      });
+
+      rig.wristChuck = createLocalPartGroup(rig.elbowR.children[0], chuckC, (g) => {
+        addCylinderPart(g, 0.24, 0.21, 0.14, { segs: 24, bevel: 0.02, center: chuckC, axis: 'y', R: Rfa, mat: MATS.steelDark });
+      });
+
+      for (let ci = 0; ci < 3; ci++) {
+        const ca = ci * (Math.PI * 2 / 3) + 0.35;
+        const Rjaw = Rfa.clone().multiply(rotYMat(ca));
+        const pKnuckle = applyPointTransform([0.14, -0.03, 0], Rjaw, chuckC);
+        const pMid     = applyPointTransform([0.27, -0.27, 0], Rjaw, chuckC);
+        const pTip     = applyPointTransform([0.11, -0.55, 0], Rjaw, chuckC);
+        const pPist0   = applyPointTransform([0.08, -0.05, 0], Rjaw, chuckC);
+        const pPist1   = applyPointTransform([0.18, -0.26, 0], Rjaw, chuckC);
+
+        const jawGroup = createLocalPartGroup(rig.wristChuck.children[0], pKnuckle, (g) => {
+          addBeveledBlock(g, 0.12, 0.12, 0.14, { chamfer: 0.02, center: pKnuckle, R: Rjaw, mat: MATS.steelDark });
+          addCylinderPart(g, 0.040, 0.040, 0.16, { segs: 14, bevel: 0.004, center: pKnuckle, axis: 'z', R: Rjaw, mat: MATS.steelChrome });
+          addLimbSegment(g, pKnuckle, pMid, 0.065, 0.070, 0.060, 0.065, MATS.armorMid);
+          addCylinderPart(g, 0.045, 0.045, 0.16, { segs: 14, bevel: 0.004, center: pMid, axis: 'z', R: Rjaw, mat: MATS.steelDark });
+          addCylinderPart(g, 0.030, 0.030, 0.18, { segs: 12, bevel: 0.003, center: pMid, axis: 'z', R: Rjaw, mat: MATS.steelChrome });
+          addLimbSegment(g, pMid, pTip, 0.058, 0.065, 0.018, 0.045, MATS.steelChrome);
+          addLimbSegment(g, pPist0, pPist1, 0.022, 0.022, 0.022, 0.022, MATS.steelChrome);
+        });
+        rig.clawJaws.push({ group: jawGroup, angle: ca });
+      }
+
+      // 5. LEFT ARM (+X): TWIN-BARREL ELECTROMAGNETIC RAIL-CANNON
+      const lx = 1.16;
+      rig.armL = createLocalPartGroup(rig.torso.children[0], [1.14, 0.62, 0], (g) => {
+        addCylinderPart(g, 0.16, 0.15, 0.44, { segs: 20, bevel: 0.01, center: [lx, 0.42, -0.02], axis: 'y', mat: MATS.steelDark });
+        addBeveledBlock(g, 0.36, 0.34, 0.40, { chamfer: 0.05, center: [lx, 0.42, -0.02], R: rotZMat(-0.08), mat: MATS.armorSlate });
+        addBeveledBlock(g, 0.38, 0.08, 0.42, { chamfer: 0.015, center: [lx, 0.30, -0.02], R: rotZMat(-0.08), mat: MATS.accentOrange });
+        addCylinderPart(g, 0.19, 0.19, 0.40, { segs: 24, bevel: 0.02, center: [lx + 0.02, 0.12, 0], axis: 'x', mat: MATS.steelDark });
+        addCylinderPart(g, 0.12, 0.12, 0.44, { segs: 20, bevel: 0.01, center: [lx + 0.02, 0.12, 0], axis: 'x', mat: MATS.steelChrome });
+      });
+
+      const Rgun = rotXMat(0.34).multiply(rotYMat(0.14));
+      const gunO = [lx + 0.06, -0.10, 0.18];
+
+      rig.elbowL = createLocalPartGroup(rig.armL.children[0], [lx + 0.02, 0.12, 0], (g) => {
+        addBeveledBlock(g, 0.40, 0.42, 0.72, { chamfer: 0.06, center: gunO, R: Rgun, mat: MATS.armorSlate });
+        const gMid = applyPointTransform([0, 0.02, 0.08], Rgun, gunO);
+        addBeveledBlock(g, 0.42, 0.24, 0.44, { chamfer: 0.04, center: gMid, R: Rgun, mat: MATS.armorMid });
+        const gOr = applyPointTransform([0, 0.06, 0.14], Rgun, gunO);
+        addBeveledBlock(g, 0.44, 0.08, 0.28, { chamfer: 0.01, center: gOr, R: Rgun, mat: MATS.accentOrange });
+
+        for (let bi = 0; bi < 11; bi++) {
+          const ang = -0.6 + bi * 0.28;
+          const segC = applyPointTransform([-0.04, -0.22 - 0.18 * Math.sin(ang), -0.10 + 0.22 * Math.cos(ang)], Rgun, gunO);
+          const Rseg = Rgun.clone().multiply(rotXMat(-ang));
+          addBeveledBlock(g, 0.16, 0.045, 0.09, { chamfer: 0.008, center: segC, R: Rseg, mat: bi % 2 === 0 ? MATS.steelDark : MATS.armorMid });
+        }
+      });
+
+      rig.railBarrelGroup = createLocalPartGroup(rig.elbowL.children[0], gunO, (g) => {
+        for (const byOff of [0.095, -0.095]) {
+          const coreC = applyPointTransform([0, byOff, 0.68], Rgun, gunO);
+          addCylinderPart(g, 0.052, 0.052, 0.68, { segs: 18, bevel: 0.002, center: coreC, axis: 'z', R: Rgun, mat: MATS.glowAmber });
+          for (let ri = 0; ri < 14; ri++) {
+            const rPos = applyPointTransform([0, byOff, 0.38 + ri * 0.044], Rgun, gunO);
+            addTubePart(g, 0.062, 0.048, 0.018, { segs: 18, center: rPos, axis: 'z', R: Rgun, mat: MATS.steelDark });
+          }
+          const mzC = applyPointTransform([0, byOff, 1.12], Rgun, gunO);
+          addTubePart(g, 0.076, 0.042, 0.24, { segs: 22, center: mzC, axis: 'z', R: Rgun, mat: MATS.armorMid });
+          const mzRing = applyPointTransform([0, byOff, 1.20], Rgun, gunO);
+          addTubePart(g, 0.080, 0.044, 0.05, { segs: 22, center: mzRing, axis: 'z', R: Rgun, mat: MATS.steelChrome });
+        }
+        for (const [syR, hR] of [[0.175, 0.04], [0.0, 0.035], [-0.175, 0.04]]) {
+          const rlC = applyPointTransform([0, syR, 0.68], Rgun, gunO);
+          addBeveledBlock(g, 0.16, hR, 0.72, { chamfer: 0.01, center: rlC, R: Rgun, mat: MATS.steelDark });
+        }
+        const clC = applyPointTransform([0, 0, 0.98], Rgun, gunO);
+        addBeveledBlock(g, 0.20, 0.38, 0.07, { chamfer: 0.015, center: clC, R: Rgun, mat: MATS.armorMid });
+      });
+
+      // 6. BIPEDAL LEGS (HIP -> THIGH -> KNEE -> SHIN -> ANKLE -> 4-TOED FOOT)
+      [['L', 1], ['R', -1]].forEach(([side, sx]) => {
+        const Rthigh = rotZMat(-sx * 0.06).multiply(rotXMat(-0.16));
+        const thC = [sx * 0.58, -0.44, 0.04];
+
+        rig[`leg${side}`] = createLocalPartGroup(rig.pelvis.children[0], [sx * 0.54, -0.12, 0], (g) => {
+          addBeveledBlock(g, 0.46, 0.74, 0.56, { chamfer: 0.08, taperTop: [0.88, 0.90], center: thC, R: Rthigh, mat: MATS.armorSlate });
+          const fendC = applyPointTransform([sx * 0.14, 0.24, 0.02], Rthigh, thC);
+          addBeveledBlock(g, 0.22, 0.42, 0.48, { chamfer: 0.05, taperTop: [0.75, 0.82], center: fendC, R: Rthigh, mat: MATS.armorMid });
+          const fthC = applyPointTransform([0, 0.02, 0.25], Rthigh, thC);
+          addBeveledBlock(g, 0.32, 0.52, 0.12, { chamfer: 0.04, center: fthC, R: Rthigh, mat: MATS.armorMid });
+
+          for (const hsx of [-1, 1]) {
+            const pPos = applyPointTransform([hsx * 0.21, -0.04, -0.14], Rthigh, thC);
+            addCylinderPart(g, 0.055, 0.055, 0.36, { segs: 14, bevel: 0.005, center: pPos, axis: 'y', R: Rthigh, mat: MATS.steelDark });
+            addCylinderPart(g, 0.038, 0.038, 0.58, { segs: 14, bevel: 0.003, center: pPos, axis: 'y', R: Rthigh, mat: MATS.steelChrome });
+          }
+        });
+
+        const knC = [sx * 0.62, -0.86, 0.12];
+        const Rshin = rotZMat(-sx * 0.03).multiply(rotXMat(0.10));
+        const shnC = [sx * 0.64, -1.34, 0.02];
+
+        rig[`knee${side}`] = createLocalPartGroup(rig[`leg${side}`].children[0], knC, (g) => {
+          addCylinderPart(g, 0.20, 0.20, 0.48, { segs: 24, bevel: 0.02, center: knC, axis: 'x', mat: MATS.steelDark });
+          addCylinderPart(g, 0.13, 0.13, 0.52, { segs: 20, bevel: 0.01, center: knC, axis: 'x', mat: MATS.steelChrome });
+          const kpC = [sx * 0.62, -0.84, 0.32];
+          addBeveledBlock(g, 0.36, 0.36, 0.22, { chamfer: 0.06, taperTop: [0.82, 0.88], center: kpC, R: rotXMat(0.08), mat: MATS.armorMid });
+          addBeveledBlock(g, 0.24, 0.24, 0.24, { chamfer: 0.04, center: kpC, R: rotXMat(0.08), mat: MATS.armorSlate });
+          addBeveledBlock(g, 0.20, 0.055, 0.04, { chamfer: 0.008, center: [kpC[0], kpC[1] - 0.12, kpC[2] + 0.11], mat: MATS.accentOrange });
+
+          addBeveledBlock(g, 0.54, 0.82, 0.64, { chamfer: 0.09, taperTop: [0.82, 0.85], center: shnC, R: Rshin, mat: MATS.armorSlate });
+          const fshC = applyPointTransform([0, -0.02, 0.28], Rshin, shnC);
+          addBeveledBlock(g, 0.36, 0.64, 0.20, { chamfer: 0.05, taperTop: [0.85, 0.90], center: fshC, R: Rshin, mat: MATS.armorMid });
+
+          for (const csx of [-1, 1]) {
+            const cfC = applyPointTransform([csx * 0.24, -0.06, -0.02], Rshin, shnC);
+            addBeveledBlock(g, 0.14, 0.58, 0.46, { chamfer: 0.04, center: cfC, R: Rshin.clone().multiply(rotZMat(-csx * 0.12)), mat: MATS.armorMid });
+          }
+          for (const ox of [-0.12, 0.12]) {
+            const stC = applyPointTransform([ox, 0, -0.30], Rshin, shnC);
+            addCylinderPart(g, 0.048, 0.048, 0.64, { segs: 14, bevel: 0.004, center: stC, axis: 'y', R: Rshin, mat: MATS.steelChrome });
+            addCylinderPart(g, 0.068, 0.068, 0.30, { segs: 14, bevel: 0.005, center: [stC[0], stC[1] - 0.12, stC[2]], axis: 'y', R: Rshin, mat: MATS.steelDark });
+          }
+        });
+
+        const fy = -1.84;
+        const fx = sx * 0.66;
+        rig[`ankle${side}`] = createLocalPartGroup(rig[`knee${side}`].children[0], [fx, fy + 0.12, 0.02], (g) => {
+          addCylinderPart(g, 0.20, 0.24, 0.20, { segs: 20, bevel: 0.015, center: [fx, fy + 0.12, 0.02], axis: 'y', mat: MATS.steelDark });
+          addBeveledBlock(g, 0.34, 0.20, 0.22, { chamfer: 0.04, center: [fx, fy + 0.10, 0.22], R: rotXMat(0.20), mat: MATS.armorMid });
+          addBeveledBlock(g, 0.58, 0.16, 0.62, { chamfer: 0.04, center: [fx, fy, 0.04], mat: MATS.armorSlate });
+
+          const toeConfigs = [
+            [-0.19, 0.16, 0.38,  0.14],
+            [ 0.00, 0.17, 0.42,  0.00],
+            [ 0.19, 0.16, 0.38, -0.14],
+          ];
+          for (const [txO, tw, tl, tyaw] of toeConfigs) {
+            const Rtoe = rotYMat(tyaw);
+            addBeveledBlock(g, tw, 0.18, tl, { chamfer: 0.03, taperTop: [0.82, 0.85], center: [fx + txO, fy - 0.01, 0.40], R: Rtoe.clone().multiply(rotXMat(0.14)), mat: MATS.armorMid });
+            addBeveledBlock(g, tw * 0.86, 0.12, 0.18, { chamfer: 0.02, taperTop: [0.75, 0.80], center: [fx + txO * 1.08, fy - 0.04, 0.60], R: Rtoe.clone().multiply(rotXMat(0.28)), mat: MATS.steelDark });
+          }
+          addBeveledBlock(g, 0.38, 0.16, 0.32, { chamfer: 0.035, taperTop: [0.80, 0.80], center: [fx, fy - 0.02, -0.34], R: rotXMat(-0.18), mat: MATS.armorMid });
+        });
+      });
+
+      document.getElementById('meshStatsText').textContent =
+        `Вершин: ${totalVertices.toLocaleString('ru-RU')}  |  PBR-текстуры: Титан + Hazard + Плазма-щит  |  IK: Zero-Drift  |  Анимаций: 11`;
+    }
+
+    buildDreadnoughtModel();
+
+    // =========================================================================
+    // 4. ANALYTICAL 2-BONE INVERSE KINEMATICS (IK) SOLVER + VISUAL GIZMOS
+    // =========================================================================
+    const ikGizmoGroup = new THREE.Group();
+    scene.add(ikGizmoGroup);
+
+    function createIKMarker(colorHex, radius = 0.24) {
+      const g = new THREE.Group();
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(radius * 0.72, radius, 24).rotateX(-Math.PI / 2),
+        new THREE.MeshBasicMaterial({ color: colorHex, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
+      );
+      const cross1 = new THREE.Mesh(
+        new THREE.PlaneGeometry(radius * 1.6, 0.03).rotateX(-Math.PI / 2),
+        new THREE.MeshBasicMaterial({ color: colorHex, side: THREE.DoubleSide })
+      );
+      const cross2 = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.03, radius * 1.6).rotateX(-Math.PI / 2),
+        new THREE.MeshBasicMaterial({ color: colorHex, side: THREE.DoubleSide })
+      );
+      g.add(ring, cross1, cross2);
+      ikGizmoGroup.add(g);
+      return g;
+    }
+
+    const footIKGizmoL = createIKMarker(0x10b981, 0.32);
+    const footIKGizmoR = createIKMarker(0x10b981, 0.32);
+    const clawStrikeGizmo = createIKMarker(0x38bdf8, 0.38);
+
+    // Glowing 3D Swing Trail Ribbon for the Crusher Claw
+    const TRAIL_MAX = 22;
+    const trailPositions = new Float32Array(TRAIL_MAX * 2 * 3);
+    const trailGeo = new THREE.BufferGeometry();
+    trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+    const trailIndices = [];
+    for (let i = 0; i < TRAIL_MAX - 1; i++) {
+      const a = i * 2, b = i * 2 + 1, c = (i + 1) * 2, d = (i + 1) * 2 + 1;
+      trailIndices.push(a, b, d, a, d, c);
+    }
+    trailGeo.setIndex(trailIndices);
+    const trailMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0.0,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const clawTrailMesh = new THREE.Mesh(trailGeo, trailMat);
+    scene.add(clawTrailMesh);
+    const trailHistory = [];
+
+    function updateClawTrail(active, intensity = 0.55) {
+      if (!active) {
+        trailMat.opacity = Math.max(0, trailMat.opacity - 0.06);
+        if (trailMat.opacity <= 0.01) trailHistory.length = 0;
+        return;
+      }
+      rig.wristChuck.updateMatrixWorld(true);
+      const pTop = new THREE.Vector3(0, -0.10, 0).applyMatrix4(rig.wristChuck.matrixWorld);
+      const pBot = new THREE.Vector3(0, -0.58, 0).applyMatrix4(rig.wristChuck.matrixWorld);
+      trailHistory.unshift({ pTop, pBot });
+      if (trailHistory.length > TRAIL_MAX) trailHistory.pop();
+
+      if (trailHistory.length >= 2) {
+        for (let i = 0; i < TRAIL_MAX; i++) {
+          const item = trailHistory[Math.min(i, trailHistory.length - 1)];
+          const idx = i * 6;
+          trailPositions[idx]     = item.pTop.x;
+          trailPositions[idx + 1] = item.pTop.y;
+          trailPositions[idx + 2] = item.pTop.z;
+          trailPositions[idx + 3] = item.pBot.x;
+          trailPositions[idx + 4] = item.pBot.y;
+          trailPositions[idx + 5] = item.pBot.z;
+        }
+        trailGeo.attributes.position.needsUpdate = true;
+        trailMat.opacity = intensity;
+      }
+    }
+
+    // Rest-pose leg segment constants (computed from exact joint offsets):
+    // Hip: [±0.54, -0.12, 0.00], Knee: [±0.62, -0.86, 0.12], Ankle: [±0.66, -1.72, 0.02]
+    const LEG_L1 = Math.hypot(0.74, 0.12); // 0.749666
+    const LEG_L2 = Math.hypot(0.86, 0.10); // 0.865794
+    const ALPHA1_REST = Math.atan2(0.12, 0.74);  // +0.16076 rad
+    const ALPHA2_REST = Math.atan2(-0.10, 0.86); // -0.11576 rad
+    const REST_KNEE_OFFSET = ALPHA1_REST - ALPHA2_REST; // +0.27652 rad
+
+    const _vTargetLocal = new THREE.Vector3();
+    const _qParentWorld = new THREE.Quaternion();
+    const _qDesiredFoot = new THREE.Quaternion();
+    const _eulerFoot    = new THREE.Euler();
+    const _vHipToAnkleUnrot = new THREE.Vector3();
+    const _qAim = new THREE.Quaternion();
+
+    // Exact bone segment constants:
+    // Thigh pivot-to-pivot: [sx*0.08, -0.74, 0.12] (L1 = 0.75392m)
+    // Shin pivot-to-pivot:  [sx*0.04, -0.86, -0.10] (L2 = 0.86672m)
+    // (LEG_L1, LEG_L2, REST_KNEE_OFFSET defined above)
+
+    /**
+     * Exact Analytical 2-Bone Quaternion Leg IK.
+     * ZERO FOOT DETACHMENT GUARANTEE:
+     * The ankle joint is RIGIDLY ANCHORED to the bottom of the shin at its rest pivot [sx*0.66, -1.72, 0.02].
+     * Ankle translation is NEVER modified, so feet can NEVER physically separate from the leg!
+     */
+    function solveLegIK(side, targetWorldVec, footPitch = 0, footYaw = 0, footRoll = 0) {
+      const sx = side === 'L' ? 1 : -1;
+      const hipJoint = rig[`leg${side}`];
+      const kneeJoint = rig[`knee${side}`];
+      const ankleJoint = rig[`ankle${side}`];
+      const pelvisSpace = rig.pelvis.children[0];
+
+      // Physical bone lock: Ankle is rigidly fixed to the end of the shin bone!
+      ankleJoint.position.set(sx * 0.66, -1.72, 0.02);
+
+      // Update pelvis world transform
+      rig.root.updateMatrixWorld(true);
+
+      // Vector from hip pivot [sx*0.54, -0.12, 0] to target ankle in pelvis local space
+      _vTargetLocal.copy(targetWorldVec);
+      pelvisSpace.worldToLocal(_vTargetLocal);
+
+      let dx = _vTargetLocal.x - sx * 0.54;
+      let dy = _vTargetLocal.y - (-0.12);
+      let dz = _vTargetLocal.z - 0.0;
+
+      let D = Math.hypot(dx, dy, dz);
+      const maxReach = LEG_L1 + LEG_L2 - 0.003; // 1.617m
+      if (D > maxReach) {
+        // Target is beyond leg reach: fully extend leg toward target without tearing the foot off!
+        const scale = maxReach / Math.max(0.001, D);
+        dx *= scale; dy *= scale; dz *= scale;
+        D = maxReach;
+      }
+      D = Math.max(0.35, D);
+
+      // Law of cosines for 2-bone chain
+      const cosB = THREE.MathUtils.clamp((LEG_L1 * LEG_L1 + LEG_L2 * LEG_L2 - D * D) / (2 * LEG_L1 * LEG_L2), -1, 1);
+      const angleB = Math.acos(cosB);
+      const kneeInteriorBend = Math.PI - angleB;
+      const kx = kneeInteriorBend - REST_KNEE_OFFSET;
+
+      // Knee joint rotates around local X
+      kneeJoint.rotation.set(kx, 0, 0);
+
+      // In unrotated hip frame, rotate shin vector [sx*0.04, -0.86, -0.10] by kx around X
+      const cK = Math.cos(kx), sK = Math.sin(kx);
+      const shinY = -0.86 * cK - (-0.10) * sK;
+      const shinZ = -0.86 * sK + (-0.10) * cK;
+
+      _vHipToAnkleUnrot.set(
+        sx * 0.08 + sx * 0.04,
+        -0.74 + shinY,
+        0.12 + shinZ
+      );
+
+      // Rotate hip with quaternion so _vHipToAnkleUnrot points exactly toward [dx, dy, dz]
+      _vTargetLocal.set(dx, dy, dz);
+      _qAim.setFromUnitVectors(_vHipToAnkleUnrot.normalize(), _vTargetLocal.normalize());
+      hipJoint.quaternion.copy(_qAim);
+
+      // Orient ankle/foot to desired pitch, yaw, roll in world space
+      kneeJoint.updateMatrixWorld(true);
+      kneeJoint.children[0].getWorldQuaternion(_qParentWorld);
+      _eulerFoot.set(footPitch, footYaw, footRoll, 'YXZ');
+      _qDesiredFoot.setFromEuler(_eulerFoot);
+      ankleJoint.quaternion.copy(_qParentWorld).invert().multiply(_qDesiredFoot);
+
+      // Update visual IK floor gizmo
+      const gizmo = side === 'L' ? footIKGizmoL : footIKGizmoR;
+      gizmo.position.set(targetWorldVec.x, Math.max(-1.92, targetWorldVec.y - 0.19), targetWorldVec.z + 0.08);
+      gizmo.rotation.y = footYaw;
+    }
+
+    // =========================================================================
+    // 5. DYNAMIC VFX: RAILGUN BOLTS, MISSILES, SPARKS & SHOCKWAVE RINGS
+    // =========================================================================
+    const activeProjectiles = [];
+    const activeShockwaves = [];
+
+    function spawnShockwave(x, z, colorHex = 0xf59e0b, maxRad = 1.6) {
+      const ringGeo = new THREE.RingGeometry(0.15, 0.28, 32);
+      ringGeo.rotateX(-Math.PI / 2);
+      const ringMat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
+      const mesh = new THREE.Mesh(ringGeo, ringMat);
+      mesh.position.set(x, -1.91, z);
+      scene.add(mesh);
+      activeShockwaves.push({ mesh, age: 0, maxAge: 0.55, maxRad });
+    }
+
+    function spawnImpactSparks(x, y, z, count = 14) {
+      for (let i = 0; i < count; i++) {
+        const sGeo = new THREE.BoxGeometry(0.04, 0.04, 0.16);
+        const sMat = new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? 0xffbb33 : 0x38bdf8 });
+        const sMesh = new THREE.Mesh(sGeo, sMat);
+        sMesh.position.set(x, y, z);
+        const ang = Math.random() * Math.PI * 2;
+        const spd = 3.0 + Math.random() * 5.5;
+        const vel = new THREE.Vector3(Math.cos(ang) * spd, 2.5 + Math.random() * 4.5, Math.sin(ang) * spd);
+        scene.add(sMesh);
+        activeProjectiles.push({ mesh: sMesh, vel, gravity: -14.0, age: 0, maxAge: 0.45 + Math.random() * 0.25 });
+      }
+    }
+
+    function spawnRailgunShot() {
+      playSound('railgun');
+      const worldPos = new THREE.Vector3();
+      rig.railBarrelGroup.getWorldPosition(worldPos);
+      const boltGeo = new THREE.CylinderGeometry(0.045, 0.045, 1.4, 8);
+      boltGeo.rotateX(Math.PI / 2);
+      const boltMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+      const bolt = new THREE.Mesh(boltGeo, boltMat);
+      bolt.position.copy(worldPos).add(new THREE.Vector3(0.1, -0.15, 1.2));
+      scene.add(bolt);
+      activeProjectiles.push({ mesh: bolt, vel: new THREE.Vector3(0.8, -0.2, 22.0), age: 0, maxAge: 0.6 });
+    }
+
+    function spawnMissileSalvo() {
+      playSound('missile');
+      for (const sx of [-1, 1]) {
+        const mGeo = new THREE.ConeGeometry(0.04, 0.22, 8);
+        mGeo.rotateX(Math.PI / 2);
+        const mMat = new THREE.MeshBasicMaterial({ color: 0xff7700 });
+        const m = new THREE.Mesh(mGeo, mMat);
+        m.position.set(sx * 1.04 + (Math.random() - 0.5) * 0.2, 1.42 + (Math.random() - 0.5) * 0.2, 0.5);
+        scene.add(m);
+        activeProjectiles.push({
+          mesh: m,
+          vel: new THREE.Vector3((Math.random() - 0.5) * 2.0, 2.8 + Math.random() * 1.5, 11.0),
+          gravity: -7.5,
+          age: 0,
+          maxAge: 1.1
+        });
+      }
+    }
+
+    function updateVFX(dt) {
+      for (let i = activeProjectiles.length - 1; i >= 0; i--) {
+        const p = activeProjectiles[i];
+        p.age += dt;
+        if (p.gravity) p.vel.y += p.gravity * dt;
+        p.mesh.position.addScaledVector(p.vel, dt);
+        if (p.age >= p.maxAge) {
+          scene.remove(p.mesh);
+          p.mesh.geometry.dispose();
+          activeProjectiles.splice(i, 1);
+        }
+      }
+      for (let i = activeShockwaves.length - 1; i >= 0; i--) {
+        const sw = activeShockwaves[i];
+        sw.age += dt;
+        const t = sw.age / sw.maxAge;
+        const s = 1 + t * sw.maxRad * 4.5;
+        sw.mesh.scale.set(s, 1, s);
+        sw.mesh.material.opacity = Math.max(0, (1 - t) * 0.85);
+        if (sw.age >= sw.maxAge) {
+          scene.remove(sw.mesh);
+          sw.mesh.geometry.dispose();
+          activeShockwaves.splice(i, 1);
+        }
+      }
+    }
+
+    // =========================================================================
+    // 6. ORBIT CAMERA CONTROLLER + IMPACT CAMERA SHAKE
+    // =========================================================================
+    const camState = {
+      yaw: -0.22,
+      pitch: 0.12,
+      dist: 7.4,
+      target: new THREE.Vector3(0, -0.10, 0),
+      shakeAmount: 0.0,
+      isDragging: false,
+      isPanning: false,
+      prevX: 0,
+      prevY: 0,
+      autoRotate: false
+    };
+
+    function updateCameraTransform(dt = 0.016) {
+      camState.pitch = Math.max(-0.35, Math.min(1.25, camState.pitch));
+      camState.dist = Math.max(2.6, Math.min(16.0, camState.dist));
+      const cp = Math.cos(camState.pitch), sp = Math.sin(camState.pitch);
+      const cy = Math.cos(camState.yaw), sy = Math.sin(camState.yaw);
+
+      let shakeX = 0, shakeY = 0;
+      if (camState.shakeAmount > 0.001) {
+        shakeX = (Math.random() - 0.5) * camState.shakeAmount;
+        shakeY = (Math.random() - 0.5) * camState.shakeAmount;
+        camState.shakeAmount = Math.max(0, camState.shakeAmount - dt * 1.4);
+      }
+
+      camera.position.set(
+        camState.target.x + camState.dist * cp * sy + shakeX,
+        camState.target.y + camState.dist * sp + shakeY,
+        camState.target.z + camState.dist * cp * cy
+      );
+      camera.lookAt(camState.target.x + shakeX * 0.5, camState.target.y + shakeY * 0.5, camState.target.z);
+    }
+    updateCameraTransform();
+
+    container.addEventListener('pointerdown', (e) => {
+      initAudio();
+      camState.isDragging = e.button === 0;
+      camState.isPanning = e.button === 2 || e.shiftKey;
+      camState.prevX = e.clientX;
+      camState.prevY = e.clientY;
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      if (!camState.isDragging && !camState.isPanning) return;
+      const dx = e.clientX - camState.prevX;
+      const dy = e.clientY - camState.prevY;
+      camState.prevX = e.clientX;
+      camState.prevY = e.clientY;
+      if (camState.isDragging) {
+        camState.yaw -= dx * 0.007;
+        camState.pitch += dy * 0.006;
+      } else if (camState.isPanning) {
+        camState.target.y += dy * 0.005;
+        camState.target.x -= dx * 0.005;
+      }
+      updateCameraTransform();
+    });
+
+    window.addEventListener('pointerup', () => {
+      camState.isDragging = false;
+      camState.isPanning = false;
+    });
+
+    container.addEventListener('contextmenu', (e) => e.preventDefault());
+    container.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      camState.dist += e.deltaY * 0.004;
+      updateCameraTransform();
+    }, { passive: false });
+
+    // =========================================================================
+    // 7. 11 FULL-IK BIOMECHANICAL ANIMATIONS
+    // =========================================================================
+    const ANIM_INFO = {
+      idle: {
+        title: '01 // ОЖИДАНИЕ И СКАНИРОВАНИЕ (FOOT IK LOCK)',
+        desc: 'Стопы намертво прикованы к полу через 2-коленный IK: при тяжелом дыхании и поворотах корпуса колени и голеностопы автоматически отрабатывают нагрузку.'
+      },
+      walk: {
+        title: '02 // ТЯЖЕЛЫЙ МАРШ ДРЕДНОУТА (IK-ЦИКЛ)',
+        desc: 'Честный IK-шаг без скольжения: опорная стопа жестко стоит на земле, таз переносит массу вбок над опорной ногой, а маховая нога идет по параболе с ударом о грунт.'
+      },
+      run: {
+        title: '03 // ШТУРМОВОЙ БЕГ (БОЕВОЙ СПРИНТ С IK)',
+        desc: 'Агрессивный наклон корпуса вперед, мощные толчки IK-шасси, сгибание локтей и форсаж термоядерных реакторов.'
+      },
+      railgun: {
+        title: '04 // ОЧЕРЕДЬ ИЗ СПАРЕННОГО РЕЛЬСОТРОНА',
+        desc: 'Широкая боевая стойка с вынесенной вперед левой ногой (Foot IK): каждый выстрел дает жесткий импульс отдачи в локоть, плечо, торс и амортизаторы ног.'
+      },
+      missiles: {
+        title: '05 // РАКЕТНЫЙ ШКВАЛ ИЗ ПЛЕЧЕВЫХ КАССЕТ',
+        desc: 'Глубокий артиллерийский упор на полусогнутых IK-ногах, открытие всех створок кассет и залповый пуск 14 микро-ракет с отдачей корпуса.'
+      },
+      claw_smash: {
+        title: '06 // СОКРУШАЮЩИЙ УДАР КЛЕШНЕЙ (РАЗМАХ + ВЫПАД С IK)',
+        desc: 'Четырехфазная биомеханика тяжелого меха: отшаг левой ногой с фиксацией стоп через 2-коленный IK, глубокий замах с закруткой торса на -75°, взрывной выпад всей массой с дуговым ударом клешней и инерционной просадкой амортизаторов.'
+      },
+      claw_combo: {
+        title: '07 // КОМБО КЛЕШНЕЙ (АМПЛИТУДА X3): СНОС 180° + АППЕРКОТ ДО НЕБА',
+        desc: 'Увеличенная в 3 раза амплитуда: глубокий замах за спину (-120°) с широким шагом, размашистый горизонтальный снос на 180° через весь корпус с метровым выпадом таза, затем глубокий нырок к самой земле и взрывной восходящий апперкот в небо с отрывом стопы!'
+      },
+      shield_wall: {
+        title: '08 // ЭНЕРГЕТИЧЕСКИЙ ЩИТ (АКТИВНАЯ ОБОРОНА)',
+        desc: 'Сгибание правого локтя на 75° для выноса щита перед оптическим блоком, широкий IK-упор ногами и гашение ударных импульсов по барьеру.'
+      },
+      jet_jump: {
+        title: '09 // РЕАКТИВНЫЙ ПРЫЖОК И ТЯЖЕЛОЕ ПРИЗЕМЛЕНИЕ',
+        desc: 'Глубокий стартовый присед (IK стоп), взлет на тяге турбин и тяжелое приземление с глубоким сжатием коленных и бедренных гидравлических поршней.'
+      },
+      victory: {
+        title: '10 // ПОБЕДНЫЙ РЕВ / БОЕВОЙ САЛЮТ',
+        desc: 'Широкая стойка на IK-ногах, подъем обоих орудий со сгибом локтей, раскрутка клешни на 360° и полное раскрытие кассет.'
+      },
+      dance: {
+        title: '11 // КИБЕР-ТАНЕЦ ДРЕДНОУТА (IK GROOVE)',
+        desc: 'Ритмичный гидравлический кач тазом и корпусом при жестко стоящих на полу IK-стопах с поочередным притопом и вращением клешни.'
+      }
+    };
+
+    // Start directly on 'claw_smash' so the user immediately sees the upgraded IK wind-up & strike!
+    let currentAnim = 'claw_combo';
+    let isPlaying = true;
+    let animSpeed = 1.0;
+    let animTime = 0;
+    let lastStepPhase = -1;
+    let lastShotTime = 0;
+    let lastWhooshTime = 0;
+    let hatchesOpen = true;
+    let shieldManual = false;
+
+    const manualOffsets = {
+      torsoYaw: 0,
+      torsoPitch: 0,
+      armLPitch: 0,
+      armRPitch: 0,
+      clawOpen: 0.35,
+      wristSpin: 0
+    };
+
+    function smoothstep(edge0, edge1, x) {
+      const t = THREE.MathUtils.clamp((x - edge0) / (edge1 - edge0), 0, 1);
+      return t * t * (3 - 2 * t);
+    }
+
+    function resetUpperBody() {
+      rig.root.position.set(0, 0, 0);
+      rig.root.rotation.set(0, 0, 0);
+      rig.pelvis.position.set(0, 0, 0);
+      rig.pelvis.rotation.set(0, 0, 0);
+      rig.torso.position.set(0, 0.32, 0);
+      rig.torso.rotation.set(0, 0, 0);
+      rig.sensorPod.rotation.set(0, 0, 0);
+      rig.shoulderL.rotation.set(0, 0, 0);
+      rig.shoulderR.rotation.set(0, 0, 0);
+      rig.armL.rotation.set(0, 0, 0);
+      rig.elbowL.rotation.set(0, 0, 0);
+      rig.railBarrelGroup.position.set(1.22, -0.10, 0.18);
+      rig.armR.rotation.set(0, 0, 0);
+      rig.elbowR.rotation.set(0, 0, 0);
+      rig.wristChuck.rotation.set(0, 0, 0);
+    }
+
+    function setClawAperture(openFraction) {
+      const flare = (openFraction - 0.35) * 0.72;
+      for (const j of rig.clawJaws) {
+        j.group.rotation.x = Math.sin(j.angle) * flare;
+        j.group.rotation.z = -Math.cos(j.angle) * flare;
+      }
+    }
+
+    function setHatchState(openFrac) {
+      const delta = (1 - openFrac) * 1.12;
+      rig.hatchTopL.rotation.x = delta;
+      rig.hatchTopR.rotation.x = delta;
+      rig.hatchSideL.rotation.y = -delta;
+      rig.hatchSideR.rotation.y = delta;
+    }
+
+    const footTargetL = new THREE.Vector3(0.66, -1.72, 0.02);
+    const footTargetR = new THREE.Vector3(-0.66, -1.72, 0.02);
+
+    function evaluateAnimation(t, dt) {
+      resetUpperBody();
+      let clawVal = manualOffsets.clawOpen;
+      let hatchVal = hatchesOpen ? 1.0 : 0.0;
+      let showShield = shieldManual;
+      let trailActive = false;
+      let trailIntensity = 0.55;
+      let phaseLabel = 'FOOT IK LOCK';
+
+      // Default planted foot targets in world space (y = -1.72 puts the foot sole flush at y = -1.94)
+      footTargetL.set(0.66, -1.72, 0.02);
+      footTargetR.set(-0.66, -1.72, 0.02);
+      let footPitchL = 0, footYawL = -0.05;
+      let footPitchR = 0, footYawR =  0.05;
+      clawStrikeGizmo.visible = false;
+
+      MATS.glowAmber.emissiveIntensity = 2.1 + 0.3 * Math.sin(t * 5.0);
+      rig.reactorL.rotation.y = t * 3.0;
+      rig.reactorR.rotation.y = -t * 3.0;
+
+      // -----------------------------------------------------------------------
+      // ANIMATION 6: HEAVY DREADNOUGHT CLAW SMASH (4-PHASE FULL-BODY IK STRIKE)
+      // -----------------------------------------------------------------------
+      if (currentAnim === 'claw_smash') {
+        const period = 2.6;
+        const cycle = ((t % period) / period); // 0..1
+
+        // Right foot planted back-right as anchor; Left foot steps forward into a wide combat lunge!
+        footTargetR.set(-0.72, -1.72, -0.18);
+        footYawR = -0.22;
+
+        if (cycle < 0.42) {
+          // PHASE 1: ANTICIPATION / WIND-UP & LEAD-FOOT STEP-IN (Замах всем корпусом -75° + шаг вперед)
+          phaseLabel = 'ФАЗА 1: ЗАМАХ И ЗАКРУТКА (-75°)';
+          const u = cycle / 0.42;
+          const coil = smoothstep(0.0, 1.0, u);
+
+          // Left foot lifts in an arc and plants forward at z = +0.56
+          const stepU = smoothstep(0.05, 0.78, u);
+          const stepLift = Math.sin(stepU * Math.PI) * 0.28;
+          footTargetL.set(0.66 + 0.10 * stepU, -1.72 + stepLift, 0.02 + 0.54 * stepU);
+          footPitchL = -0.22 * Math.sin(stepU * Math.PI);
+          footYawL = 0.12 * stepU;
+
+          if (u > 0.76 && lastStepPhase !== 1) {
+            lastStepPhase = 1;
+            playSound('stomp');
+            spawnShockwave(0.76, 0.56, 0x94a3b8, 0.85);
+          }
+
+          // Shift pelvis weight onto rear right leg & coil hips right (-26 deg)
+          rig.pelvis.position.set(-0.18 * coil, -0.11 * coil, -0.16 * coil);
+          rig.pelvis.rotation.set(-0.08 * coil, -0.45 * coil, 0.06 * coil);
+
+          // Torso coils deeply back-right (-48 deg relative to pelvis -> -74 deg total!)
+          rig.torso.rotation.set(-0.24 * coil, -0.82 * coil, -0.16 * coil);
+          // Optical sensor pod counter-rotates to stay locked on target!
+          rig.sensorPod.rotation.set(0.18 * coil, 0.85 * coil, 0);
+
+          // Right shoulder & arm draw wide and high behind the back; Elbow cocks sharply!
+          rig.shoulderR.rotation.set(-0.25 * coil, 0, -0.28 * coil);
+          rig.armR.rotation.set(-0.85 * coil, -0.68 * coil, -0.78 * coil);
+          rig.elbowR.rotation.set(-1.12 * coil, 0, 0.25 * coil);
+
+          // Left arm (Rail-cannon) swings forward-right across chest as heavy counterweight!
+          rig.armL.rotation.set(-0.55 * coil, 0.38 * coil, 0.28 * coil);
+          rig.elbowL.rotation.set(-0.48 * coil, 0, 0);
+
+          // Claw opens to 100% max aperture and chuck spins up with rising speed
+          clawVal = 0.30 + 0.70 * coil;
+          rig.wristChuck.rotation.y = t * (4.0 + 14.0 * coil);
+          MATS.glowAmber.emissiveIntensity = 2.2 + 1.8 * coil;
+        }
+        else if (cycle < 0.58) {
+          // PHASE 2: EXPLOSIVE LUNGE & WIDE DIAGONAL-OVERHEAD CLEAVE (Взрывной выпад и дуговой удар с хлестом)
+          phaseLabel = 'ФАЗА 2: ДУГОВОЙ УДАР И ВЫПАД';
+          const u = (cycle - 0.42) / 0.16;
+          // Body/hips lead the whip; Arm follows with kinetic lag and accelerates violently (`u^1.6`)
+          const hipWhip = smoothstep(0.0, 0.85, u);
+          const armWhip = Math.pow(smoothstep(0.08, 1.0, u), 1.35);
+          const arcMid  = Math.sin(armWhip * Math.PI); // Outward circular swing arc!
+
+          if (u < 0.2 && t - lastWhooshTime > 0.8) {
+            lastWhooshTime = t;
+            playSound('whoosh');
+          }
+
+          // Both feet stay locked to the ground via IK while pelvis lunges forward & drops!
+          footTargetL.set(0.76, -1.72, 0.56);
+          footYawL = 0.12;
+
+          rig.pelvis.position.set(
+            -0.18 + 0.34 * hipWhip,
+            -0.11 - 0.27 * hipWhip,
+            -0.16 + 0.62 * hipWhip
+          );
+          rig.pelvis.rotation.set(
+            -0.08 + 0.26 * hipWhip,
+            -0.45 + 0.84 * hipWhip,
+            0.06 - 0.14 * hipWhip
+          );
+
+          // Torso whips across by >100 degrees and pitches down into the smash!
+          rig.torso.rotation.set(
+            -0.24 + 0.68 * hipWhip,
+            -0.82 + 1.54 * hipWhip,
+            -0.16 + 0.34 * hipWhip
+          );
+          rig.sensorPod.rotation.set(0.18 - 0.42 * hipWhip, 0.85 - 1.35 * hipWhip, 0);
+
+          // Right arm traces a wide, sweeping overhead-diagonal haymaker arc!
+          rig.shoulderR.rotation.set(-0.25 + 0.40 * armWhip, 0, -0.28 + 0.35 * armWhip);
+          rig.armR.rotation.set(
+            -0.85 - 0.65 * arcMid + 0.52 * armWhip,
+            -0.68 + 1.18 * armWhip,
+            -0.78 - 0.25 * arcMid + 1.08 * armWhip
+          );
+          // Elbow uncoils from cocked (-1.12) to extended (-0.08) at impact!
+          rig.elbowR.rotation.set(
+            -1.12 + 1.04 * armWhip,
+            0,
+            0.25 - 0.25 * armWhip
+          );
+
+          // Left arm wrenches backward to counterbalance the right-arm torque!
+          rig.armL.rotation.set(-0.55 + 0.85 * hipWhip, 0.38 - 0.65 * hipWhip, 0.28 + 0.22 * hipWhip);
+          rig.elbowL.rotation.set(-0.48 + 0.20 * hipWhip, 0, 0);
+
+          clawVal = 1.0 - 0.35 * armWhip;
+          rig.wristChuck.rotation.y = t * 22.0;
+          trailActive = true;
+          trailIntensity = 0.78;
+        }
+        else if (cycle < 0.74) {
+          // PHASE 3: CRUSHING IMPACT, CLAW SNAP & HYDRAULIC SUSPENSION COMPRESSION
+          phaseLabel = 'ФАЗА 3: ПРОЛОМ И СМЫКАНИЕ КЛЕШНИ';
+          const u = (cycle - 0.58) / 0.16;
+          const compress = Math.sin(u * Math.PI); // Extra hydraulic suspension dip on impact
+          const shudder  = Math.exp(-u * 6.0) * Math.sin(u * 45.0) * 0.035;
+
+          footTargetL.set(0.76, -1.72, 0.56);
+          footYawL = 0.12;
+
+          if (u < 0.18 && lastStepPhase !== 3) {
+            lastStepPhase = 3;
+            playSound('smash');
+            camState.shakeAmount = 0.22;
+            spawnShockwave(-0.18, 1.18, 0x38bdf8, 2.4);
+            spawnShockwave(-0.18, 1.18, 0xf59e0b, 1.6);
+            spawnImpactSparks(-0.18, -1.55, 1.18, 18);
+          }
+
+          rig.pelvis.position.set(0.16, -0.38 - 0.09 * compress + shudder, 0.46 + 0.04 * compress);
+          rig.pelvis.rotation.set(0.18 + 0.05 * compress, 0.39, -0.08);
+          rig.torso.rotation.set(0.44 + 0.08 * compress + shudder, 0.72, 0.18);
+          rig.sensorPod.rotation.set(-0.24, -0.50, 0);
+
+          rig.shoulderR.rotation.set(0.15, 0, 0.07);
+          rig.armR.rotation.set(-0.33 + shudder, 0.50, 0.30);
+          rig.elbowR.rotation.set(-0.08 - 0.18 * compress, 0, 0);
+
+          rig.armL.rotation.set(0.30, -0.27, 0.50);
+          rig.elbowL.rotation.set(-0.28, 0, 0);
+
+          // Claw jaws clamped tight!
+          clawVal = 0.0;
+          rig.wristChuck.rotation.y = t * 6.0;
+          trailActive = u < 0.35;
+          clawStrikeGizmo.visible = true;
+          clawStrikeGizmo.position.set(-0.18, -1.91, 1.18);
+        }
+        else {
+          // PHASE 4: HEAVY HYDRAULIC RECOVERY & STEP BACK TO STANCE
+          phaseLabel = 'ФАЗА 4: ГИДРАВЛИЧЕСКИЙ ВОЗВРАТ';
+          lastStepPhase = 4;
+          const u = (cycle - 0.74) / 0.26;
+          const rec = smoothstep(0.0, 1.0, u);
+          const k = 1.0 - rec;
+
+          // Lead left foot lifts slightly and steps back from z = 0.56 to 0.02
+          const stepBackLift = Math.sin(rec * Math.PI) * 0.18;
+          footTargetL.set(0.76 - 0.10 * rec, -1.72 + stepBackLift, 0.56 - 0.54 * rec);
+          footYawL = 0.12 * k - 0.05 * rec;
+
+          rig.pelvis.position.set(0.16 * k, -0.38 * k, 0.46 * k);
+          rig.pelvis.rotation.set(0.18 * k, 0.39 * k, -0.08 * k);
+          rig.torso.rotation.set(0.44 * k, 0.72 * k, 0.18 * k);
+          rig.sensorPod.rotation.set(-0.24 * k, -0.50 * k, 0);
+
+          // Elbow bends first to haul the heavy claw up, then shoulder settles
+          const haulBend = Math.sin(rec * Math.PI) * 0.55;
+          rig.shoulderR.rotation.set(0.15 * k, 0, 0.07 * k);
+          rig.armR.rotation.set(-0.33 * k, 0.50 * k, 0.30 * k);
+          rig.elbowR.rotation.set(-0.08 * k - haulBend, 0, 0);
+
+          rig.armL.rotation.set(0.30 * k, -0.27 * k, 0.50 * k);
+          rig.elbowL.rotation.set(-0.28 * k, 0, 0);
+
+          clawVal = 0.35 * rec;
+        }
+      }
+
+      // -----------------------------------------------------------------------
+      // ANIMATION 7: 2-HIT MECH CLAW COMBO — HIGH-AMPLITUDE WITH 100% SECURE FOOT ANCHORING
+      // -----------------------------------------------------------------------
+      else if (currentAnim === 'claw_combo') {
+        const period = 3.2;
+        const cycle = (t % period) / period;
+
+        if (cycle < 0.24) {
+          // PHASE 1: BACK-RIGHT COIL & LEAD STEP-IN (FEET 100% ATTACHED)
+          phaseLabel = 'КОМБО 1: ЗАМАХ С ШАГОМ (-85°)';
+          const u = cycle / 0.24;
+          const s = smoothstep(0, 1, u);
+          const stepLift = Math.sin(s * Math.PI) * 0.24;
+
+          // Left foot steps forward-left comfortably
+          footTargetL.set(0.66 + 0.12 * s, -1.72 + stepLift, 0.02 + 0.36 * s);
+          footPitchL = -0.22 * Math.sin(s * Math.PI);
+          footYawL = 0.18 * s;
+          // Right foot anchors firmly
+          footTargetR.set(-0.66 - 0.06 * s, -1.72, 0.02 - 0.12 * s);
+          footYawR = -0.24 * s;
+
+          if (u > 0.82 && lastStepPhase !== 1) {
+            lastStepPhase = 1;
+            playSound('stomp');
+            spawnShockwave(0.78, 0.38, 0x94a3b8, 0.85);
+          }
+
+          // Pelvis coils back-right within 1.55m max leg distance
+          rig.pelvis.position.set(-0.24 * s, -0.22 * s, -0.16 * s);
+          rig.pelvis.rotation.set(-0.10 * s, -0.72 * s, 0.12 * s);
+
+          // Torso coils further (-1.25 rad total) with arms winding wide
+          rig.torso.rotation.set(-0.24 * s, -1.18 * s, -0.28 * s);
+          rig.sensorPod.rotation.set(0.18 * s, 1.05 * s, 0);
+
+          rig.shoulderR.rotation.set(-0.20 * s, -0.50 * s, -0.45 * s);
+          rig.armR.rotation.set(-0.35 * s, -1.25 * s, -1.25 * s);
+          rig.elbowR.rotation.set(-0.22 * s, 0, 0.25 * s);
+
+          rig.shoulderL.rotation.set(0, 0.35 * s, 0.25 * s);
+          rig.armL.rotation.set(-0.75 * s, 0.58 * s, 0.50 * s);
+          rig.elbowL.rotation.set(-0.65 * s, 0, 0);
+
+          clawVal = 0.35 + 0.65 * s;
+          rig.wristChuck.rotation.y = t * 16.0;
+          MATS.glowAmber.emissiveIntensity = 2.4 + 1.6 * s;
+        }
+        else if (cycle < 0.44) {
+          // PHASE 2: HIT 1 — WIDE 180° HORIZONTAL SCYTHE SWEEP (REAR FOOT DRAGS SAFELY)
+          phaseLabel = 'КОМБО 1: РАЗМАШИСТЫЙ СНОС НА 180°!';
+          const u = (cycle - 0.24) / 0.20;
+          const hipS = smoothstep(0, 0.85, u);
+          const armS = Math.pow(smoothstep(0.04, 1.0, u), 1.25);
+          const midArc = Math.sin(armS * Math.PI);
+
+          // Left foot is securely planted at (0.78, -1.72, 0.38)
+          footTargetL.set(0.78, -1.72, 0.38);
+          footYawL = 0.18;
+          // Rear right foot slides forward from -0.10 to +0.26 so distance to right hip NEVER exceeds 1.58m!
+          const dragR = smoothstep(0.15, 0.80, u);
+          footTargetR.set(-0.72 + 0.16 * dragR, -1.72, -0.10 + 0.36 * dragR);
+          footYawR = -0.24 + 0.12 * dragR;
+
+          if (u > 0.08 && u < 0.25 && t - lastWhooshTime > 0.5) {
+            lastWhooshTime = t;
+            playSound('whoosh');
+          }
+          if (u > 0.52 && lastStepPhase !== 2) {
+            lastStepPhase = 2;
+            playSound('smash');
+            camState.shakeAmount = 0.20;
+            spawnImpactSparks(0.35, -0.25, 1.35, 16);
+            spawnShockwave(0.35, 0.85, 0x38bdf8, 2.0);
+          }
+
+          // Pelvis lunges forward and sweeps across smoothly
+          rig.pelvis.position.set(
+            -0.24 + 0.50 * hipS,
+            -0.22 - 0.08 * midArc,
+            -0.16 + 0.44 * hipS
+          );
+          rig.pelvis.rotation.set(
+            -0.10 + 0.25 * hipS,
+            -0.72 + 1.40 * hipS,
+            0.12 - 0.20 * hipS
+          );
+
+          rig.torso.rotation.set(
+            -0.24 + 0.58 * hipS,
+            -1.18 + 2.52 * hipS,
+            -0.28 + 0.62 * hipS
+          );
+          rig.sensorPod.rotation.set(0.18 - 0.35 * hipS, 1.05 - 1.95 * hipS, 0);
+
+          rig.shoulderR.rotation.set(
+            -0.20 + 0.42 * armS,
+            -0.50 + 1.18 * armS,
+            -0.45 + 0.82 * armS
+          );
+          rig.armR.rotation.set(
+            -0.35 - 1.10 * midArc - 0.50 * armS,
+            -1.25 + 2.38 * armS,
+            -1.25 - 0.35 * midArc + 2.18 * armS
+          );
+          rig.elbowR.rotation.set(
+            -0.22 + 0.20 * midArc - 0.50 * armS,
+            0,
+            0.25 - 0.55 * armS
+          );
+
+          rig.shoulderL.rotation.set(0, 0.35 - 0.80 * hipS, 0.25 + 0.35 * hipS);
+          rig.armL.rotation.set(-0.75 + 1.30 * hipS, 0.58 - 1.25 * hipS, 0.50 + 0.28 * hipS);
+          rig.elbowL.rotation.set(-0.65 + 0.35 * hipS, 0, 0);
+
+          clawVal = 1.0 - 0.90 * smoothstep(0.35, 0.85, u);
+          rig.wristChuck.rotation.y = t * 28.0;
+          trailActive = true;
+          trailIntensity = 0.92;
+        }
+        else if (cycle < 0.64) {
+          // PHASE 3: DEEP HYDRAULIC SQUAT & CLAW COIL NEAR GROUND
+          phaseLabel = 'КОМБО 2: ПРИСЕД К ЗЕМЛЕ (ЗАРЯДКА АППЕРКОТА)';
+          const u = (cycle - 0.44) / 0.20;
+          const s = smoothstep(0, 1, u);
+          const rStepLift = Math.sin(s * Math.PI) * 0.22;
+
+          footTargetL.set(0.78 - 0.06 * s, -1.72, 0.38 - 0.08 * s);
+          footYawL = 0.18;
+          footTargetR.set(-0.56 - 0.10 * s, -1.72 + rStepLift, 0.26 + 0.16 * s);
+          footYawR = -0.12 - 0.08 * s;
+
+          if (u > 0.80 && lastStepPhase !== 3) {
+            lastStepPhase = 3;
+            playSound('stomp');
+            spawnImpactSparks(-0.45, -1.75, 0.55, 10);
+          }
+
+          rig.pelvis.position.set(
+            0.26 - 0.40 * s,
+            -0.22 - 0.22 * s,
+            0.28 - 0.12 * s
+          );
+          rig.pelvis.rotation.set(
+            0.15 + 0.18 * s,
+            0.68 - 1.35 * s,
+            -0.08 + 0.22 * s
+          );
+
+          rig.torso.rotation.set(
+            0.34 + 0.22 * s,
+            1.34 - 2.45 * s,
+            0.34 - 0.72 * s
+          );
+          rig.sensorPod.rotation.set(-0.12 - 0.30 * s, -0.90 + 1.75 * s, 0);
+
+          rig.shoulderR.rotation.set(0.22 + 0.30 * s, 0.68 - 1.10 * s, 0.37 - 0.75 * s);
+          rig.armR.rotation.set(-0.85 + 1.62 * s, 1.13 - 1.78 * s, 0.93 - 1.45 * s);
+          rig.elbowR.rotation.set(-0.72 - 0.65 * s, 0, -0.30 + 0.55 * s);
+
+          rig.shoulderL.rotation.set(0, -0.45 + 0.80 * s, 0.60 - 0.35 * s);
+          rig.armL.rotation.set(0.55 - 1.28 * s, -0.67 + 1.10 * s, 0.78 - 0.50 * s);
+          rig.elbowL.rotation.set(-0.30 - 0.50 * s, 0, 0);
+
+          clawVal = 0.10 + 0.90 * s;
+          rig.wristChuck.rotation.y = t * 20.0;
+          trailActive = u > 0.75;
+          trailIntensity = 0.65;
+        }
+        else if (cycle < 0.84) {
+          // PHASE 4: HIT 2 — EXPLOSIVE SKY-RIPPING UPPERCUT (SAFE LEAP RANGE)
+          phaseLabel = 'КОМБО 2: ВЗРЫВНОЙ АППЕРКОТ ДО НЕБА!';
+          const u = (cycle - 0.64) / 0.20;
+          const launch = Math.pow(smoothstep(0, 0.88, u), 1.2);
+          const sweepArc = Math.sin(launch * Math.PI);
+
+          if (u > 0.06 && u < 0.22 && t - lastWhooshTime > 0.4) {
+            lastWhooshTime = t;
+            playSound('whoosh');
+          }
+          if (u > 0.32 && lastStepPhase !== 7) {
+            lastStepPhase = 7;
+            playSound('smash');
+            camState.shakeAmount = 0.26;
+            spawnImpactSparks(-0.15, 1.10, 1.25, 20);
+            spawnShockwave(0.0, 0.50, 0xf59e0b, 2.3);
+            spawnShockwave(-0.2, 0.75, 0x38bdf8, 1.8);
+          }
+
+          // Left foot stays anchored; Right foot pushes upward with natural jump arc
+          footTargetL.set(0.72, -1.72, 0.30);
+          footYawL = 0.18;
+          const rFootLeap = Math.sin(smoothstep(0.12, 1.0, u) * Math.PI * 0.85) * 0.30;
+          footTargetR.set(-0.66 + 0.06 * launch, -1.72 + rFootLeap, 0.42 + 0.12 * launch);
+          footPitchR = 0.35 * launch;
+          footYawR = -0.20;
+
+          // Pelvis drives upward within safe anatomical leg extension
+          rig.pelvis.position.set(
+            -0.14 + 0.28 * launch,
+            -0.44 + 0.34 * launch,
+            0.16 + 0.20 * launch
+          );
+          rig.pelvis.rotation.set(
+            0.33 - 0.48 * launch,
+            -0.67 + 1.30 * launch,
+            0.14 - 0.24 * launch
+          );
+
+          rig.torso.rotation.set(
+            0.56 - 1.06 * launch,
+            -1.11 + 2.22 * launch,
+            -0.38 + 0.72 * launch
+          );
+          rig.sensorPod.rotation.set(-0.42 + 0.60 * launch, 0.85 - 1.55 * launch, 0);
+
+          rig.shoulderR.rotation.set(
+            0.52 - 0.88 * launch,
+            -0.42 + 0.88 * launch,
+            -0.38 + 0.90 * launch
+          );
+          rig.armR.rotation.set(
+            0.77 - 2.92 * launch,
+            -0.65 + 1.18 * launch,
+            -0.52 - 0.42 * sweepArc + 0.72 * launch
+          );
+          rig.elbowR.rotation.set(
+            -1.37 + 1.25 * launch,
+            0,
+            0.25 - 0.25 * launch
+          );
+
+          rig.shoulderL.rotation.set(0, 0.35 - 0.70 * launch, 0.25 + 0.35 * launch);
+          rig.armL.rotation.set(-0.73 + 1.38 * launch, 0.43 - 0.90 * launch, 0.28 + 0.42 * launch);
+          rig.elbowL.rotation.set(-0.80 + 0.50 * launch, 0, 0);
+
+          clawVal = 1.0 - 0.95 * smoothstep(0.30, 0.80, u);
+          rig.wristChuck.rotation.y = t * 32.0;
+          trailActive = true;
+          trailIntensity = 0.95;
+          MATS.glowAmber.emissiveIntensity = 4.2;
+        }
+        else {
+          // PHASE 5: HEAVY LANDING & RETURN TO STANCE
+          phaseLabel = 'ТЯЖЕЛОЕ ПРИЗЕМЛЕНИЕ И ВОЗВРАТ';
+          const u = (cycle - 0.84) / 0.16;
+          const rec = smoothstep(0, 1, u);
+          const k = 1.0 - rec;
+          const landingDip = Math.sin(rec * Math.PI) * 0.16;
+
+          if (u > 0.25 && lastStepPhase !== 8) {
+            lastStepPhase = 8;
+            playSound('stomp');
+            camState.shakeAmount = 0.10;
+            spawnShockwave(-0.66, 0.02, 0x94a3b8, 1.2);
+          }
+
+          footTargetL.set(0.72 * k + 0.66 * rec, -1.72, 0.30 * k + 0.02 * rec);
+          footYawL = 0.18 * k - 0.05 * rec;
+          footTargetR.set(-0.60 * k - 0.66 * rec, -1.72, 0.54 * k + 0.02 * rec);
+          footPitchR = 0.35 * k;
+          footYawR = -0.20 * k + 0.05 * rec;
+
+          rig.pelvis.position.set(0.14 * k, -0.10 * k - landingDip, 0.36 * k);
+          rig.pelvis.rotation.set(-0.15 * k, 0.63 * k, -0.10 * k);
+          rig.torso.rotation.set(-0.50 * k + 0.14 * landingDip, 1.11 * k, 0.34 * k);
+          rig.sensorPod.rotation.set(0.18 * k, -0.70 * k, 0);
+
+          rig.shoulderR.rotation.set(-0.36 * k, 0.46 * k, 0.52 * k);
+          rig.armR.rotation.set(-2.15 * k, 0.53 * k, 0.20 * k);
+          rig.elbowR.rotation.set(-0.12 * k - 0.50 * Math.sin(rec * Math.PI), 0, 0);
+
+          rig.shoulderL.rotation.set(0, -0.35 * k, 0.60 * k);
+          rig.armL.rotation.set(0.65 * k, -0.47 * k, 0.70 * k);
+          rig.elbowL.rotation.set(-0.30 * k, 0, 0);
+
+          clawVal = 0.05 + 0.30 * rec;
+        }
+      }
+
+      // -----------------------------------------------------------------------
+      // ANIMATION 1: IDLE & SENSOR SCAN (WITH TRUE FOOT IK LOCK)
+      // -----------------------------------------------------------------------
+      else if (currentAnim === 'idle') {
+        const breath = Math.sin(t * 2.2);
+        const sway   = Math.sin(t * 0.9);
+        // Pelvis moves down/up and shifts laterally, while feet stay 100% glued to the floor via IK!
+        rig.pelvis.position.set(sway * 0.06, -0.05 + breath * 0.04, 0.0);
+        rig.pelvis.rotation.set(0, sway * 0.06, sway * 0.03);
+        rig.torso.rotation.x = 0.04 + breath * 0.03;
+        rig.torso.rotation.y = 0.08 + sway * 0.16;
+        rig.sensorPod.rotation.y = Math.sin(t * 1.7) * 0.26;
+        rig.sensorPod.rotation.x = Math.cos(t * 1.3) * 0.09;
+        rig.armL.rotation.x = -0.08 + breath * 0.04;
+        rig.armL.rotation.z = 0.06;
+        rig.elbowL.rotation.x = -0.15 - breath * 0.04;
+        rig.armR.rotation.x = -0.06 - breath * 0.04;
+        rig.armR.rotation.z = -0.06;
+        rig.elbowR.rotation.x = -0.18 + breath * 0.05;
+        clawVal = 0.35 + 0.18 * Math.sin(t * 2.5);
+      }
+
+      // -----------------------------------------------------------------------
+      // ANIMATION 2: HEAVY DREADNOUGHT WALK (TRUE IK FOOT-PLANT & WEIGHT SHIFT)
+      // -----------------------------------------------------------------------
+      else if (currentAnim === 'walk') {
+        phaseLabel = 'IK GAIT CYCLE';
+        const w = t * 3.0;
+        const stepLen = 0.44;
+        const stepHeight = 0.28;
+
+        // Lateral weight transfer toward the stance leg
+        const weightShiftX = -Math.cos(w) * 0.13;
+        const bobY = -0.08 - Math.abs(Math.sin(w)) * 0.09;
+        rig.pelvis.position.set(weightShiftX, bobY, 0);
+        rig.pelvis.rotation.set(0.04, -Math.sin(w) * 0.12, -weightShiftX * 0.35);
+
+        rig.torso.rotation.x = 0.08 + Math.abs(Math.cos(w)) * 0.05;
+        rig.torso.rotation.y = Math.sin(w) * 0.20;
+        rig.torso.rotation.z = weightShiftX * 0.25;
+
+        // Foot L & R trajectories in world space (stance phase = linear ground lock, swing phase = arched lift)
+        const sL = Math.sin(w);
+        const cL = Math.cos(w);
+        const liftL = Math.max(0, cL);
+        footTargetL.set(0.66, -1.72 + Math.pow(liftL, 1.3) * stepHeight, sL * stepLen);
+        footPitchL = liftL * 0.25 * cL;
+
+        const sR = Math.sin(w + Math.PI);
+        const cR = Math.cos(w + Math.PI);
+        const liftR = Math.max(0, cR);
+        footTargetR.set(-0.66, -1.72 + Math.pow(liftR, 1.3) * stepHeight, sR * stepLen);
+        footPitchR = liftR * 0.25 * cR;
+
+        // Arm swing with elbow flex
+        rig.armL.rotation.x = sL * 0.28 - 0.12;
+        rig.elbowL.rotation.x = -0.25 - Math.max(0, -sL) * 0.25;
+        rig.armR.rotation.x = -sL * 0.32 - 0.12;
+        rig.elbowR.rotation.x = -0.28 - Math.max(0, sL) * 0.30;
+
+        const phase = Math.floor(((w + Math.PI * 0.5) / Math.PI) % 2);
+        if (phase !== lastStepPhase) {
+          lastStepPhase = phase;
+          playSound('stomp');
+          camState.shakeAmount = 0.05;
+          spawnShockwave(phase === 0 ? 0.66 : -0.66, phase === 0 ? footTargetL.z : footTargetR.z, 0x94a3b8, 0.85);
+        }
+      }
+
+      // -----------------------------------------------------------------------
+      // ANIMATION 3: COMBAT SPRINT / CHARGE (IK RUN)
+      // -----------------------------------------------------------------------
+      else if (currentAnim === 'run') {
+        phaseLabel = 'IK SPRINT CHARGE';
+        const w = t * 5.6;
+        const stepLen = 0.64;
+        const stepHeight = 0.40;
+
+        const sL = Math.sin(w);
+        const cL = Math.cos(w);
+        const liftL = Math.max(0, cL);
+        const liftR = Math.max(0, -cL);
+
+        rig.pelvis.position.set(-cL * 0.10, -0.16 + Math.sin(w * 2) * 0.08, 0.12);
+        rig.pelvis.rotation.set(0.12, -sL * 0.18, cL * 0.06);
+        rig.torso.rotation.x = 0.26 + Math.cos(w * 2) * 0.06;
+        rig.torso.rotation.y = sL * 0.28;
+
+        footTargetL.set(0.66, -1.72 + liftL * stepHeight, sL * stepLen);
+        footPitchL = liftL * 0.35;
+        footTargetR.set(-0.66, -1.72 + liftR * stepHeight, -sL * stepLen);
+        footPitchR = liftR * 0.35;
+
+        rig.armL.rotation.x = sL * 0.48 - 0.25;
+        rig.elbowL.rotation.x = -0.45;
+        rig.armR.rotation.x = -sL * 0.52 - 0.25;
+        rig.elbowR.rotation.x = -0.55;
+        MATS.glowAmber.emissiveIntensity = 3.4;
+
+        const phase = Math.floor(((w + Math.PI * 0.5) / Math.PI) % 2);
+        if (phase !== lastStepPhase) {
+          lastStepPhase = phase;
+          playSound('stomp');
+          camState.shakeAmount = 0.09;
+          spawnShockwave(phase === 0 ? 0.66 : -0.66, phase === 0 ? footTargetL.z : footTargetR.z, 0xf59e0b, 1.15);
+        }
+      }
+
+      // -----------------------------------------------------------------------
+      // ANIMATION 4: RAIL-CANNON BARRAGE (PLANTED WIDE IK STANCE + RECOIL ABSORPTION)
+      // -----------------------------------------------------------------------
+      else if (currentAnim === 'railgun') {
+        phaseLabel = 'IK BRACE + RECOIL';
+        footTargetL.set(0.72, -1.72, 0.38);
+        footTargetR.set(-0.72, -1.72, -0.26);
+        footYawL = 0.10;
+        footYawR = -0.20;
+
+        const fireCycle = (t * 3.2) % 1.0;
+        const recoil = Math.exp(-fireCycle * 8.0);
+
+        // Pelvis & knees absorb recoil while feet stay locked via IK!
+        rig.pelvis.position.set(-0.06, -0.14 - recoil * 0.04, -recoil * 0.07);
+        rig.pelvis.rotation.y = -0.22;
+        rig.torso.rotation.y = 0.26 + Math.sin(t * 1.6) * 0.16 - recoil * 0.08;
+        rig.torso.rotation.x = 0.06 - recoil * 0.07;
+
+        rig.armL.rotation.x = -0.38 + recoil * 0.08;
+        rig.armL.rotation.y = 0.12;
+        rig.elbowL.rotation.x = -0.18 - recoil * 0.14;
+        rig.railBarrelGroup.position.z = 0.18 - recoil * 0.18;
+
+        rig.armR.rotation.x = -0.28;
+        rig.armR.rotation.z = -0.22;
+        rig.elbowR.rotation.x = -0.35;
+        MATS.glowAmber.emissiveIntensity = 2.2 + recoil * 2.5;
+
+        if (t - lastShotTime > 0.32) {
+          lastShotTime = t;
+          spawnRailgunShot();
+        }
+      }
+
+      // -----------------------------------------------------------------------
+      // ANIMATION 5: MISSILE POD SALVO (DEEP ARTILLERY SQUAT WITH FOOT IK)
+      // -----------------------------------------------------------------------
+      else if (currentAnim === 'missiles') {
+        phaseLabel = 'IK ARTILLERY BRACE';
+        footTargetL.set(0.76, -1.72, 0.16);
+        footTargetR.set(-0.76, -1.72, -0.14);
+        footYawL = 0.14;
+        footYawR = -0.14;
+
+        const shudder = Math.sin(t * 18.0) * 0.015;
+        rig.pelvis.position.set(0, -0.24 + shudder, -0.06);
+        rig.torso.rotation.x = -0.16 + shudder;
+        rig.armL.rotation.z = 0.25;
+        rig.elbowL.rotation.x = -0.35;
+        rig.armR.rotation.z = -0.25;
+        rig.elbowR.rotation.x = -0.35;
+        hatchVal = 1.0;
+
+        if (t - lastShotTime > 0.26) {
+          lastShotTime = t;
+          spawnMissileSalvo();
+        }
+      }
+
+      // -----------------------------------------------------------------------
+      // ANIMATION 8: ENERGY SHIELD WALL (FOREARM-MOUNTED SHIELD + HOLOGRAPHIC UNFOLD ANIMATION)
+      // -----------------------------------------------------------------------
+      else if (currentAnim === 'shield_wall') {
+        showShield = true;
+        const period = 4.6;
+        const cycle = (t % period) / period;
+
+        // Stage 1 (0..0.14): Step into sideways phalanx stance & raise forearm in front of chest
+        // Stage 2 (0.14..0.34): Multi-ring holographic shield unfolds from forearm crystal!
+        // Stage 3 (0.34..0.88): Active guard with periodic impact ripples
+        // Stage 4 (0.88..1.00): Collapse shield back into crystal before next cycle
+        const raiseS = smoothstep(0.0, 0.14, cycle) * (1.0 - smoothstep(0.90, 1.0, cycle));
+
+        if (cycle < 0.14) {
+          phaseLabel = 'ВЫНОС РУКИ В ЗАЩИТНУЮ СТОЙКУ';
+        } else if (cycle < 0.34) {
+          phaseLabel = 'РАСКРЫТИЕ ГОЛОГРАФИЧЕСКОГО ЩИТА';
+          if (cycle < 0.18 && lastStepPhase !== 81) {
+            lastStepPhase = 81;
+            playSound('shield_deploy');
+          }
+        } else if (cycle < 0.88) {
+          phaseLabel = 'АКТИВНАЯ ОБОРОНА (ЩИТ НА РУКЕ)';
+          lastStepPhase = 82;
+        } else {
+          phaseLabel = 'СВЕРТЫВАНИЕ ЭНЕРГОЩИТА';
+        }
+
+        // Wide sideways phalanx stance: Right (shield-side) foot planted forward, Left foot anchored back!
+        footTargetR.set(-0.66 + 0.22 * raiseS, -1.72, 0.02 + 0.54 * raiseS);
+        footYawR = 0.05 + 0.25 * raiseS;
+        footTargetL.set(0.66 + 0.10 * raiseS, -1.72, 0.02 - 0.44 * raiseS);
+        footYawL = -0.05 + 0.72 * raiseS;
+
+        const breath = Math.sin(t * 3.0);
+        const hitWave = (cycle > 0.42 && cycle < 0.82) ? Math.exp(-((cycle - 0.48) % 0.28) * 18.0) * 0.14 : 0.0;
+
+        // Turn pelvis (+28 deg) AND torso (+30 deg) so right shoulder rotates 58° FORWARD!
+        rig.pelvis.position.set(-0.06 * raiseS, -0.20 * raiseS - hitWave * 0.20, 0.18 * raiseS - hitWave * 0.38);
+        rig.pelvis.rotation.set(0.05 * raiseS, 0.48 * raiseS, -0.04 * raiseS);
+
+        rig.torso.rotation.set((0.08 + hitWave * 0.15) * raiseS, 0.50 * raiseS, 0.06 * raiseS);
+
+        // Optical sensor pod counter-rotates (-0.98 rad) so lenses look STRAIGHT FORWARD (+Z) over the shield!
+        rig.sensorPod.rotation.set(-0.06 * raiseS, -0.82 * raiseS, 0.04 * raiseS);
+
+        // Exact forearm-guard angles: upper arm pitches forward, elbow bends (-1.38 rad) horizontally across chest
+        // so the forearm crystal emitter (and attached shield) sit at [x = -0.08, y = +0.28, z = +1.56] facing +Z!
+        rig.shoulderR.rotation.set(-0.18 * raiseS, 0.22 * raiseS, -0.12 * raiseS);
+        rig.armR.rotation.set((-0.52 + breath * 0.02 + hitWave * 0.16) * raiseS, 0.30 * raiseS, -0.10 * raiseS);
+        rig.elbowR.rotation.set(-1.38 * raiseS, 0, 0);
+
+        // Left arm (Rail-cannon) braced back-left in reserve
+        rig.shoulderL.rotation.set(0, -0.25 * raiseS, 0.20 * raiseS);
+        rig.armL.rotation.set(0.22 * raiseS, -0.35 * raiseS, 0.32 * raiseS);
+        rig.elbowL.rotation.set(-0.48 * raiseS, 0, 0);
+        clawVal = 0.35 * (1 - raiseS) + 0.05 * raiseS;
+      }
+
+      // -----------------------------------------------------------------------
+      // ANIMATION 9: JET-ASSISTED JUMP & HEAVY IK LANDING ABSORPTION
+      // -----------------------------------------------------------------------
+      else if (currentAnim === 'jet_jump') {
+        const cycle = (t * 0.60) % 1.0;
+        footTargetL.set(0.70, -1.72, 0.12);
+        footTargetR.set(-0.70, -1.72, -0.08);
+
+        if (cycle < 0.24) {
+          phaseLabel = 'IK PRE-JUMP SQUAT';
+          const u = smoothstep(0, 1, cycle / 0.24);
+          rig.pelvis.position.y = -0.36 * u;
+          rig.torso.rotation.x = 0.28 * u;
+          rig.armL.rotation.x = 0.25 * u;
+          rig.armR.rotation.x = 0.25 * u;
+          rig.elbowL.rotation.x = -0.45 * u;
+          rig.elbowR.rotation.x = -0.45 * u;
+        } else if (cycle < 0.72) {
+          phaseLabel = 'THRUSTER FLIGHT';
+          const u = (cycle - 0.24) / 0.48;
+          const arc = Math.sin(u * Math.PI);
+          rig.pelvis.position.y = -0.36 * (1 - arc) + 1.25 * arc;
+          // While airborne, feet lift with the mech
+          footTargetL.y = -1.72 + Math.max(0, rig.pelvis.position.y + 0.15) * 0.85;
+          footTargetR.y = -1.72 + Math.max(0, rig.pelvis.position.y + 0.05) * 0.85;
+          footPitchL = 0.32 * arc;
+          footPitchR = 0.38 * arc;
+
+          rig.torso.rotation.x = -0.14 * arc;
+          rig.armL.rotation.z = 0.38 * arc;
+          rig.armR.rotation.z = -0.38 * arc;
+          rig.elbowL.rotation.x = -0.35 * arc;
+          rig.elbowR.rotation.x = -0.35 * arc;
+          MATS.glowAmber.emissiveIntensity = 4.2;
+        } else {
+          phaseLabel = 'IK SHOCK ABSORPTION';
+          const u = (cycle - 0.72) / 0.28;
+          const shock = Math.sin(u * Math.PI);
+          // Feet lock to y = -1.72 while pelvis compresses down to -0.44!
+          rig.pelvis.position.y = -0.44 * shock;
+          rig.torso.rotation.x = 0.36 * shock;
+          rig.armL.rotation.x = -0.35 * shock;
+          rig.armR.rotation.x = -0.35 * shock;
+          rig.elbowL.rotation.x = -0.55 * shock;
+          rig.elbowR.rotation.x = -0.55 * shock;
+          if (u < 0.15 && t - lastShotTime > 0.8) {
+            lastShotTime = t;
+            playSound('smash');
+            camState.shakeAmount = 0.24;
+            spawnShockwave(0, 0, 0xf59e0b, 2.6);
+            spawnImpactSparks(0.66, -1.85, 0.12, 8);
+            spawnImpactSparks(-0.66, -1.85, -0.08, 8);
+          }
+        }
+      }
+
+      // -----------------------------------------------------------------------
+      // ANIMATION 10: VICTORY ROAR / SALUTE (PLANTED IK LEGS + BENT ELBOWS)
+      // -----------------------------------------------------------------------
+      else if (currentAnim === 'victory') {
+        phaseLabel = 'IK STANCE + SALUTE';
+        footTargetL.set(0.74, -1.72, 0.10);
+        footTargetR.set(-0.74, -1.72, 0.10);
+        footYawL = 0.15;
+        footYawR = -0.15;
+
+        const s = Math.sin(t * 2.5);
+        rig.pelvis.position.y = -0.08 + 0.06 * Math.abs(s);
+        rig.torso.rotation.x = -0.20;
+        rig.torso.rotation.y = Math.sin(t * 1.5) * 0.28;
+        rig.armL.rotation.set(-0.75 + 0.12 * s, 0, 0.38);
+        rig.elbowL.rotation.x = -0.45;
+        rig.armR.rotation.set(-0.95 - 0.12 * s, 0, -0.42);
+        rig.elbowR.rotation.x = -0.52;
+        rig.wristChuck.rotation.y = t * 8.0;
+        clawVal = 0.5 + 0.45 * Math.sin(t * 6.0);
+        hatchVal = 1.0;
+        MATS.glowAmber.emissiveIntensity = 3.2;
+      }
+
+      // -----------------------------------------------------------------------
+      // ANIMATION 11: CYBER DANCE (DEAD-LOCKED IK FEET + BOOSTED GROOVE AMPLITUDE)
+      // -----------------------------------------------------------------------
+      else if (currentAnim === 'dance') {
+        phaseLabel = 'DEAD-LOCKED FOOT IK GROOVE';
+        const beat = t * 5.2;
+        const halfBeat = beat * 0.5;
+        const bSin = Math.sin(beat);
+        const bCos = Math.cos(beat);
+        const hSin = Math.sin(halfBeat);
+        const hCos = Math.cos(halfBeat);
+
+        // Feet are 100% DEAD-LOCKED to their floor coordinates (zero sliding or floating!)
+        footTargetL.set(0.68, -1.72, 0.04);
+        footTargetR.set(-0.68, -1.72, 0.04);
+        footPitchL = 0; footYawL = -0.06;
+        footPitchR = 0; footYawR =  0.06;
+
+        // Slightly increased amplitude (~25-30% more) on pelvis sway, bounce, and hip twist:
+        rig.pelvis.position.set(
+          hSin * 0.29,
+          -0.14 - Math.abs(bSin) * 0.21,
+          bCos * 0.09
+        );
+        rig.pelvis.rotation.set(
+          bSin * 0.08,
+          hCos * 0.25,
+          hSin * 0.14
+        );
+
+        // Torso counter-groove with added pitch bounce and shoulder roll
+        rig.torso.rotation.set(
+          0.06 + Math.abs(bSin) * 0.14,
+          -hCos * 0.46,
+          -hSin * 0.18
+        );
+        rig.sensorPod.rotation.set(-bSin * 0.12, bSin * 0.42, 0);
+
+        // Shoulders & arms pump with slightly wider amplitude
+        rig.shoulderL.rotation.z = Math.max(0, bSin) * 0.22;
+        rig.shoulderR.rotation.z = -Math.max(0, -bSin) * 0.22;
+
+        rig.armL.rotation.set(-0.52 + bSin * 0.48, hCos * 0.22, 0.28 + bCos * 0.26);
+        rig.elbowL.rotation.x = -0.62 - bCos * 0.34;
+
+        rig.armR.rotation.set(-0.52 - bSin * 0.48, -hCos * 0.22, -0.28 + bCos * 0.26);
+        rig.elbowR.rotation.x = -0.62 + bCos * 0.34;
+
+        rig.wristChuck.rotation.y = t * 7.5;
+        clawVal = 0.5 + 0.48 * bSin;
+        hatchVal = 0.5 + 0.5 * bCos;
+      }
+
+      // Apply manual user slider offsets on top of animation!
+      rig.torso.rotation.y += THREE.MathUtils.degToRad(manualOffsets.torsoYaw);
+      rig.torso.rotation.x += THREE.MathUtils.degToRad(manualOffsets.torsoPitch);
+      rig.armL.rotation.x  += THREE.MathUtils.degToRad(manualOffsets.armLPitch);
+      rig.armR.rotation.x  += THREE.MathUtils.degToRad(manualOffsets.armRPitch);
+      rig.wristChuck.rotation.y += THREE.MathUtils.degToRad(manualOffsets.wristSpin);
+
+      // Solve 2-Bone Analytical Leg IK for Left and Right legs AFTER pelvis transform is set!
+      solveLegIK('L', footTargetL, footPitchL, footYawL, 0);
+      solveLegIK('R', footTargetR, footPitchR, footYawR, 0);
+
+      setClawAperture(clawVal);
+      setHatchState(hatchVal);
+      updateClawTrail(trailActive, trailIntensity);
+
+      const badge = document.getElementById('ikPhaseBadge');
+      if (badge) badge.textContent = phaseLabel;
+
+      if (rig.shieldDome) {
+        // Compute deployment progress (0..1) with staggered multi-ring holographic unfold!
+        let targetDeploy = 0.0;
+        if (currentAnim === 'shield_wall') {
+          const cyc = (t % 4.6) / 4.6;
+          if (cyc >= 0.12 && cyc <= 0.88) {
+            targetDeploy = smoothstep(0.12, 0.32, cyc);
+          } else if (cyc > 0.88) {
+            targetDeploy = 1.0 - smoothstep(0.88, 0.98, cyc);
+          }
+        } else if (shieldManual) {
+          targetDeploy = 1.0;
+        }
+
+        if (rig.shieldDome._deployVal === undefined) rig.shieldDome._deployVal = 0.0;
+        if (currentAnim === 'shield_wall') {
+          rig.shieldDome._deployVal = targetDeploy;
+        } else {
+          // Smoothly animate scale in/out when manually toggled!
+          const step = dt * 3.2;
+          if (rig.shieldDome._deployVal < targetDeploy) rig.shieldDome._deployVal = Math.min(targetDeploy, rig.shieldDome._deployVal + step);
+          else if (rig.shieldDome._deployVal > targetDeploy) rig.shieldDome._deployVal = Math.max(targetDeploy, rig.shieldDome._deployVal - step);
+        }
+
+        const dVal = rig.shieldDome._deployVal;
+        rig.shieldDome.visible = dVal > 0.01;
+
+        if (rig.shieldDome.visible && rig.shieldDome.userData.outerGroup) {
+          const { hubMesh, innerGroup, midGroup, outerGroup, domeMat } = rig.shieldDome.userData;
+
+          // Elastic backOut helper for crisp sci-fi hologram snap
+          const backOut = (x) => {
+            const c1 = 1.70158;
+            const c3 = c1 + 1;
+            return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+          };
+
+          const s1 = backOut(smoothstep(0.0, 0.45, dVal));
+          const s2 = backOut(smoothstep(0.20, 0.72, dVal));
+          const s3 = backOut(smoothstep(0.40, 1.00, dVal));
+
+          // 1) Hub & Inner Ring snap open first and spin into lock
+          hubMesh.scale.setScalar(Math.max(0.01, s1));
+          innerGroup.scale.set(1.0, Math.max(0.01, s1), Math.max(0.01, s1));
+          innerGroup.rotation.x = (1.0 - smoothstep(0.0, 0.45, dVal)) * 1.8;
+
+          // 2) Middle Ring & Radial Spokes unfold next with counter-rotation
+          midGroup.scale.set(1.0, Math.max(0.01, s2), Math.max(0.01, s2));
+          midGroup.rotation.x = -(1.0 - smoothstep(0.20, 0.72, dVal)) * 1.4;
+
+          // 3) Outer Hexagonal Barrier expands last with an ignition glow flash!
+          outerGroup.scale.set(1.0, Math.max(0.01, s3 * 1.06), Math.max(0.01, s3));
+          outerGroup.rotation.x = (1.0 - smoothstep(0.40, 1.00, dVal)) * 0.8;
+
+          const flash = Math.sin(smoothstep(0.35, 1.0, dVal) * Math.PI);
+          domeMat.opacity = 0.34 + 0.32 * flash + 0.06 * Math.sin(t * 8.0);
+          domeMat.emissiveIntensity = 1.75 + 2.2 * flash;
+          MATS.glowCyan.emissiveIntensity = 2.2 + 2.5 * flash;
+        }
+      }
+    }
+
+    // =========================================================================
+    // 8. DIRECT 3D MODEL EXPORTERS (.OBJ, .STL, .GLTF)
+    // =========================================================================
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 250);
+    }
+
+    function exportToOBJ() {
+      rig.root.updateMatrixWorld(true);
+      let obj = '# Heavy Dreadnought MK-IV 3D Model\n';
+      let vOffset = 1;
+      const vTmp = new THREE.Vector3();
+      const nTmp = new THREE.Vector3();
+
+      allMeshesList.forEach((mesh, idx) => {
+        if (!mesh.visible) return;
+        obj += `o Dreadnought_Part_${idx + 1}\n`;
+        const pos = mesh.geometry.attributes.position;
+        const norm = mesh.geometry.attributes.normal;
+        const normalMat = new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld);
+
+        for (let i = 0; i < pos.count; i++) {
+          vTmp.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+          obj += `v ${vTmp.x.toFixed(5)} ${vTmp.y.toFixed(5)} ${vTmp.z.toFixed(5)}\n`;
+        }
+        for (let i = 0; i < norm.count; i++) {
+          nTmp.fromBufferAttribute(norm, i).applyMatrix3(normalMat).normalize();
+          obj += `vn ${nTmp.x.toFixed(4)} ${nTmp.y.toFixed(4)} ${nTmp.z.toFixed(4)}\n`;
+        }
+        for (let i = 0; i < pos.count; i += 3) {
+          const a = vOffset + i, b = vOffset + i + 1, c = vOffset + i + 2;
+          obj += `f ${a}//${a} ${b}//${b} ${c}//${c}\n`;
+        }
+        vOffset += pos.count;
+      });
+
+      downloadBlob(new Blob([obj], { type: 'text/plain' }), 'dreadnought_mk4.obj');
+      showToast('Модель dreadnought_mk4.obj успешно выгружена!');
+    }
+
+    function exportToSTL() {
+      rig.root.updateMatrixWorld(true);
+      let triCount = 0;
+      allMeshesList.forEach(m => {
+        if (m.visible) triCount += m.geometry.attributes.position.count / 3;
+      });
+
+      const buffer = new ArrayBuffer(84 + triCount * 50);
+      const view = new DataView(buffer);
+      view.setUint32(80, triCount, true);
+
+      let offset = 84;
+      const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3();
+      const cb = new THREE.Vector3(), ab = new THREE.Vector3();
+
+      allMeshesList.forEach(mesh => {
+        if (!mesh.visible) return;
+        const pos = mesh.geometry.attributes.position;
+        for (let i = 0; i < pos.count; i += 3) {
+          vA.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+          vB.fromBufferAttribute(pos, i + 1).applyMatrix4(mesh.matrixWorld);
+          vC.fromBufferAttribute(pos, i + 2).applyMatrix4(mesh.matrixWorld);
+          cb.subVectors(vC, vB);
+          ab.subVectors(vA, vB);
+          cb.cross(ab).normalize();
+
+          view.setFloat32(offset, cb.x, true); offset += 4;
+          view.setFloat32(offset, cb.y, true); offset += 4;
+          view.setFloat32(offset, cb.z, true); offset += 4;
+
+          for (const v of [vA, vB, vC]) {
+            view.setFloat32(offset, v.x, true); offset += 4;
+            view.setFloat32(offset, v.y, true); offset += 4;
+            view.setFloat32(offset, v.z, true); offset += 4;
+          }
+          view.setUint16(offset, 0, true); offset += 2;
+        }
+      });
+
+      downloadBlob(new Blob([buffer], { type: 'application/octet-stream' }), 'dreadnought_mk4.stl');
+      showToast('Бинарный файл dreadnought_mk4.stl готов для 3D-печати и CAD!');
+    }
+
+    function exportToGLTF() {
+      rig.root.updateMatrixWorld(true);
+      const positions = [];
+      const normals = [];
+      const vTmp = new THREE.Vector3();
+      const nTmp = new THREE.Vector3();
+
+      allMeshesList.forEach(mesh => {
+        if (!mesh.visible) return;
+        const pos = mesh.geometry.attributes.position;
+        const norm = mesh.geometry.attributes.normal;
+        const normalMat = new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld);
+        for (let i = 0; i < pos.count; i++) {
+          vTmp.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+          nTmp.fromBufferAttribute(norm, i).applyMatrix3(normalMat).normalize();
+          positions.push(vTmp.x, vTmp.y, vTmp.z);
+          normals.push(nTmp.x, nTmp.y, nTmp.z);
+        }
+      });
+
+      const posArr = new Float32Array(positions);
+      const normArr = new Float32Array(normals);
+      const combined = new Uint8Array(posArr.byteLength + normArr.byteLength);
+      combined.set(new Uint8Array(posArr.buffer), 0);
+      combined.set(new Uint8Array(normArr.buffer), posArr.byteLength);
+
+      let minX = Infinity, minY = Infinity, minZ = Infinity;
+      let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+      for (let i = 0; i < positions.length; i += 3) {
+        if (positions[i] < minX) minX = positions[i];
+        if (positions[i+1] < minY) minY = positions[i+1];
+        if (positions[i+2] < minZ) minZ = positions[i+2];
+        if (positions[i] > maxX) maxX = positions[i];
+        if (positions[i+1] > maxY) maxY = positions[i+1];
+        if (positions[i+2] > maxZ) maxZ = positions[i+2];
+      }
+
+      let binaryStr = '';
+      const chunk = 8192;
+      for (let i = 0; i < combined.length; i += chunk) {
+        binaryStr += String.fromCharCode.apply(null, combined.subarray(i, i + chunk));
+      }
+      const b64 = btoa(binaryStr);
+
+      const gltf = {
+        asset: { version: '2.0', generator: 'Dreadnought 3D Studio' },
+        scene: 0,
+        scenes: [{ nodes: [0] }],
+        nodes: [{ name: 'Heavy_Dreadnought_MK4', mesh: 0 }],
+        meshes: [{
+          name: 'Dreadnought_Mesh',
+          primitives: [{ attributes: { POSITION: 0, NORMAL: 1 }, material: 0 }]
+        }],
+        materials: [{
+          name: 'Dreadnought_Titanium',
+          pbrMetallicRoughness: {
+            baseColorFactor: [0.25, 0.28, 0.33, 1.0],
+            metallicFactor: 0.65,
+            roughnessFactor: 0.38
+          }
+        }],
+        buffers: [{
+          uri: 'data:application/octet-stream;base64,' + b64,
+          byteLength: combined.byteLength
+        }],
+        bufferViews: [
+          { buffer: 0, byteOffset: 0, byteLength: posArr.byteLength, target: 34962 },
+          { buffer: 0, byteOffset: posArr.byteLength, byteLength: normArr.byteLength, target: 34962 }
+        ],
+        accessors: [
+          { bufferView: 0, componentType: 5126, count: posArr.length / 3, type: 'VEC3', min: [minX, minY, minZ], max: [maxX, maxY, maxZ] },
+          { bufferView: 1, componentType: 5126, count: normArr.length / 3, type: 'VEC3' }
+        ]
+      };
+
+      downloadBlob(new Blob([JSON.stringify(gltf)], { type: 'model/gltf+json' }), 'dreadnought_mk4.gltf');
+      showToast('Файл dreadnought_mk4.gltf (glTF 2.0) успешно скачан!');
+    }
+
+    // =========================================================================
+    // 9. UI EVENT LISTENERS
+    // =========================================================================
+    document.querySelectorAll('.anim-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        initAudio();
+        document.querySelectorAll('.anim-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentAnim = btn.dataset.anim;
+        animTime = 0;
+        lastStepPhase = -1;
+        const info = ANIM_INFO[currentAnim];
+        if (info) {
+          document.getElementById('activeAnimTitle').textContent = info.title;
+          document.getElementById('activeAnimDesc').textContent = info.desc;
+        }
+      });
+    });
+
+    const CAM_PRESETS = {
+      ref1:    { yaw: -0.22, pitch: 0.12, dist: 7.5, target: [0, -0.10, 0] },
+      combat:  { yaw: -0.45, pitch: 0.15, dist: 7.4, target: [0, -0.15, 0.2] },
+      front:   { yaw:  0.00, pitch: 0.08, dist: 7.2, target: [0, -0.10, 0] },
+      side:    { yaw: -1.35, pitch: 0.10, dist: 7.6, target: [0, -0.10, 0.1] },
+      back:    { yaw:  2.55, pitch: 0.16, dist: 7.4, target: [0, -0.10, 0] },
+      closeup: { yaw: -0.28, pitch: 0.14, dist: 4.5, target: [-0.2, 0.35, 0.2] },
+    };
+
+    document.querySelectorAll('.cam-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const p = CAM_PRESETS[btn.dataset.cam];
+        if (p) {
+          camState.yaw = p.yaw;
+          camState.pitch = p.pitch;
+          camState.dist = p.dist;
+          camState.target.set(...p.target);
+          updateCameraTransform();
+        }
+      });
+    });
+
+    function setShadingMode(mode) {
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      if (mode === 'shaded') {
+        document.getElementById('btnModeShaded').classList.add('active');
+        Object.values(MATS).forEach(m => { m.wireframe = false; });
+        edgeLinesList.forEach(l => { l.visible = true; });
+        edgeHighlightMat.opacity = 0.32;
+        edgeHighlightMat.color.setHex(0x94a3b8);
+      } else if (mode === 'wire_overlay') {
+        document.getElementById('btnModeWireOverlay').classList.add('active');
+        Object.values(MATS).forEach(m => { m.wireframe = false; });
+        edgeLinesList.forEach(l => { l.visible = true; });
+        edgeHighlightMat.opacity = 0.85;
+        edgeHighlightMat.color.setHex(0xf59e0b);
+      } else if (mode === 'wire_only') {
+        document.getElementById('btnModeWireOnly').classList.add('active');
+        Object.values(MATS).forEach(m => { m.wireframe = true; });
+        edgeLinesList.forEach(l => { l.visible = false; });
+      }
+    }
+
+    document.getElementById('btnModeShaded').addEventListener('click', () => setShadingMode('shaded'));
+    document.getElementById('btnModeWireOverlay').addEventListener('click', () => setShadingMode('wire_overlay'));
+    document.getElementById('btnModeWireOnly').addEventListener('click', () => setShadingMode('wire_only'));
+
+
+
+    let showIKGizmos = true;
+    document.getElementById('btnToggleIKGizmos').addEventListener('click', (e) => {
+      showIKGizmos = !showIKGizmos;
+      ikGizmoGroup.visible = showIKGizmos;
+      e.currentTarget.textContent = showIKGizmos ? '🎯 IK-узлы: Вкл' : '🎯 IK-узлы: Выкл';
+    });
+
+    let isStudioLightBg = true;
+    document.getElementById('btnBgToggle').addEventListener('click', (e) => {
+      isStudioLightBg = !isStudioLightBg;
+      if (isStudioLightBg) {
+        scene.background.setHex(0x9ca3af);
+        scene.fog.color.setHex(0x9ca3af);
+        floorMat.color.setHex(0x828994);
+        e.currentTarget.textContent = 'Фон: Студия';
+      } else {
+        scene.background.setHex(0x131720);
+        scene.fog.color.setHex(0x131720);
+        floorMat.color.setHex(0x191f2b);
+        e.currentTarget.textContent = 'Фон: Ангар';
+      }
+    });
+
+    document.getElementById('btnAutoRotate').addEventListener('click', (e) => {
+      camState.autoRotate = !camState.autoRotate;
+      e.currentTarget.textContent = camState.autoRotate ? 'Авто-облет: Вкл' : 'Авто-облет: Выкл';
+    });
+
+    const tabBtnAnims = document.getElementById('tabBtnAnims');
+    const tabBtnRig   = document.getElementById('tabBtnRig');
+    const panelAnims  = document.getElementById('panelAnims');
+    const panelRig    = document.getElementById('panelRig');
+
+    tabBtnAnims.addEventListener('click', () => {
+      panelAnims.classList.remove('hidden');
+      panelRig.classList.add('hidden');
+      tabBtnAnims.classList.add('border-amber-500', 'text-amber-400', 'bg-slate-900/60');
+      tabBtnRig.classList.remove('border-amber-500', 'text-amber-400', 'bg-slate-900/60');
+    });
+
+    tabBtnRig.addEventListener('click', () => {
+      panelRig.classList.remove('hidden');
+      panelAnims.classList.add('hidden');
+      tabBtnRig.classList.add('border-amber-500', 'text-amber-400', 'bg-slate-900/60');
+      tabBtnAnims.classList.remove('border-amber-500', 'text-amber-400', 'bg-slate-900/60');
+    });
+
+    document.getElementById('btnPlayPause').addEventListener('click', (e) => {
+      isPlaying = !isPlaying;
+      e.currentTarget.textContent = isPlaying ? '⏸ Пауза' : '▶ Пуск';
+    });
+
+    document.getElementById('btnTriggerAction').addEventListener('click', () => {
+      initAudio();
+      spawnRailgunShot();
+      spawnMissileSalvo();
+      spawnShockwave(0, 0.2, 0xf59e0b, 1.8);
+    });
+
+    document.getElementById('sliderSpeed').addEventListener('input', (e) => {
+      animSpeed = parseFloat(e.target.value);
+      document.getElementById('speedValueLabel').textContent = `Скорость: ${animSpeed.toFixed(1)}x`;
+    });
+
+    document.getElementById('btnToggleShield').addEventListener('click', (e) => {
+      shieldManual = !shieldManual;
+      e.currentTarget.textContent = shieldManual ? '🛡️ Энергощит: Активен' : '🛡️ Энергощит: Выкл';
+    });
+
+    document.getElementById('btnToggleHatches').addEventListener('click', (e) => {
+      hatchesOpen = !hatchesOpen;
+      e.currentTarget.textContent = hatchesOpen ? '🚀 Люки кассет: Откр' : '🚀 Люки кассет: Закр';
+    });
+
+    function wireRigSlider(id, valId, key, suffix = '°') {
+      const el = document.getElementById(id);
+      const lbl = document.getElementById(valId);
+      el.addEventListener('input', () => {
+        const v = parseFloat(el.value);
+        manualOffsets[key] = key === 'clawOpen' ? v / 100.0 : v;
+        lbl.textContent = `${v}${suffix}`;
+      });
+    }
+    wireRigSlider('sliderTorsoYaw', 'valTorsoYaw', 'torsoYaw');
+    wireRigSlider('sliderTorsoPitch', 'valTorsoPitch', 'torsoPitch');
+    wireRigSlider('sliderArmLPitch', 'valArmLPitch', 'armLPitch');
+    wireRigSlider('sliderArmRPitch', 'valArmRPitch', 'armRPitch');
+    wireRigSlider('sliderClawOpen', 'valClawOpen', 'clawOpen', '%');
+    wireRigSlider('sliderWristSpin', 'valWristSpin', 'wristSpin');
+
+    document.getElementById('btnResetRig').addEventListener('click', () => {
+      manualOffsets.torsoYaw = 0;
+      manualOffsets.torsoPitch = 0;
+      manualOffsets.armLPitch = 0;
+      manualOffsets.armRPitch = 0;
+      manualOffsets.clawOpen = 0.35;
+      manualOffsets.wristSpin = 0;
+      document.getElementById('sliderTorsoYaw').value = 0;
+      document.getElementById('sliderTorsoPitch').value = 0;
+      document.getElementById('sliderArmLPitch').value = 0;
+      document.getElementById('sliderArmRPitch').value = 0;
+      document.getElementById('sliderClawOpen').value = 35;
+      document.getElementById('sliderWristSpin').value = 0;
+      document.getElementById('valTorsoYaw').textContent = '0°';
+      document.getElementById('valTorsoPitch').textContent = '0°';
+      document.getElementById('valArmLPitch').textContent = '0°';
+      document.getElementById('valArmRPitch').textContent = '0°';
+      document.getElementById('valClawOpen').textContent = '35%';
+      document.getElementById('valWristSpin').textContent = '0°';
+    });
+
+    document.getElementById('btnAudioToggle').addEventListener('click', () => {
+      initAudio();
+      audioEnabled = !audioEnabled;
+      document.getElementById('audioIcon').textContent = audioEnabled ? '🔊' : '🔇';
+      document.getElementById('audioLabel').textContent = audioEnabled ? 'Звук: Вкл' : 'Звук: Выкл';
+      if (audioEnabled) playSound('stomp');
+    });
+
+    document.getElementById('btnDownloadGLB').addEventListener('click', exportToGLTF);
+    document.getElementById('btnDownloadOBJ').addEventListener('click', exportToOBJ);
+    document.getElementById('btnDownloadSTL').addEventListener('click', exportToSTL);
+
+    function handleResize() {
+      const w = container.clientWidth || 800;
+      const h = container.clientHeight || 600;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h, false);
+    }
+    window.addEventListener('resize', handleResize);
+    handleResize();
+
+    // =========================================================================
+    // 10. MAIN RENDER LOOP
+    // =========================================================================
+    let prevTime = performance.now();
+
+    function animate(now) {
+      requestAnimationFrame(animate);
+      const dt = Math.min(0.05, (now - prevTime) / 1000);
+      prevTime = now;
+
+      if (isPlaying) {
+        animTime += dt * animSpeed;
+      }
+      if (camState.autoRotate && !camState.isDragging) {
+        camState.yaw += dt * 0.45;
+      }
+
+      updateCameraTransform(dt);
+      evaluateAnimation(animTime, dt);
+      updateVFX(dt);
+      renderer.render(scene, camera);
+    }
+
+
+
+    let texturesEnabled = true;
+    document.getElementById('btnToggleTextures').addEventListener('click', (e) => {
+      texturesEnabled = !texturesEnabled;
+
+      MATS.armorSlate.map = texturesEnabled ? texSeamsAlb : null;
+      MATS.armorSlate.bumpMap = texturesEnabled ? texSeamsBmp : null;
+      MATS.armorSlate.color.setHex(texturesEnabled ? 0x8a9c82 : 0x364030);
+      MATS.armorSlate.needsUpdate = true;
+
+      MATS.armorMid.map = texturesEnabled ? texSeamsAlb : null;
+      MATS.armorMid.bumpMap = texturesEnabled ? texSeamsBmp : null;
+      MATS.armorMid.color.setHex(texturesEnabled ? 0x76856f : 0x2b3327);
+      MATS.armorMid.needsUpdate = true;
+
+      MATS.steelDark.bumpMap = texturesEnabled ? texSeamsBmp : null;
+      MATS.steelDark.needsUpdate = true;
+
+      MATS.accentOrange.map = texturesEnabled ? texHazard : null;
+      MATS.accentOrange.color.setHex(texturesEnabled ? 0xffffff : 0xc76f24);
+      MATS.accentOrange.needsUpdate = true;
+
+      MATS.chestBadge.map = texturesEnabled ? texBadge : null;
+      MATS.chestBadge.color.setHex(texturesEnabled ? 0xffffff : 0x4c5665);
+      MATS.chestBadge.needsUpdate = true;
+
+      if (rig.shieldDome && rig.shieldDome.userData.domeMat) {
+        rig.shieldDome.userData.domeMat.map = texturesEnabled ? texShield : null;
+        rig.shieldDome.userData.domeMat.alphaMap = texturesEnabled ? texShield : null;
+        rig.shieldDome.userData.domeMat.emissiveMap = texturesEnabled ? texShield : null;
+        rig.shieldDome.userData.domeMat.needsUpdate = true;
+      }
+      e.currentTarget.textContent = texturesEnabled ? '🎨 Текстуры: Вкл' : '🎨 Текстуры: Выкл';
+      showToast(texturesEnabled ? 'Швы, заклепки, bump-карты и декали включены!' : 'Переключено на гладкий студийный металл');
+    });
+
+    function startApp() {
+      handleResize();
+      requestAnimationFrame(animate);
+    }
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      startApp();
+    } else {
+      window.addEventListener('DOMContentLoaded', startApp);
+      window.addEventListener('load', startApp);
+    }
+  </script>
+</body>
+</html>
