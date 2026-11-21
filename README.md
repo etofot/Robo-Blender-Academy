@@ -35,9 +35,10 @@
 
 ### 3. `LEG_STUDY_LAB/` — Эталонная Hard-Surface Нога Меха (3D Сборка, 50 шагов)
 Полная лаборатория реверса и процедурного воссоздания эталонной ноги:
-* **3D Сцены Blender (`.blend`):**
-  * `MASTER_LEG_50_STEPS_COMPLETE.blend` — Финальная сборка ноги (все 50 шагов, гидравлика, зубчатые венцы, PBR).
-  * `REFERENCE_LEG_ISOLATED.blend` и `LEg1_OK.blend` — Изолированная оригинальная нога референса (53 детали).
+* **Универсальные 3D Модели для Облачных Агентов (`.glb` / `.blend`):**
+  * **`REFERENCE_LEG_ISOLATED.glb`** — Оригинальная нога-образец со скриншота в формате glTF/GLB (53 детали, PBR).
+  * **`REFERENCE_LEG_ISOLATED.blend`** & **`LEG_REFERENCE_OK.blend`** — Сцены для Blender.
+  * **`MASTER_LEG_50_STEPS_COMPLETE.glb`** & **`.blend`** — Полная 50-шаговая мастер-сборка.
   * Фазовые сборки: `PHASE1_TO_6_EXECUTION.blend`, `PHASE1_TO_5_EXECUTION.blend`, `PHASE1_AND_PHASE2_EXECUTION.blend`.
 * **Скрипты сборки по фазам (`execute_phase*.py`):**
   * `execute_phase1_steps.py` — Блокаут кинематических осей и габаритов.
@@ -45,9 +46,12 @@
   * `execute_phase4_subsystems.py` — Теплообменные бачки и щелевые радиаторы.
   * `execute_phase5_armor.py` — Накладные фацетированные бронеплиты.
   * `execute_phase6_foot.py` & `execute_phase7_final_assembly.py` — 4-палая карданная стопа и финальная сборка.
-* **Визуальные контактные листы и рендеры:**
+* **Визуальные контактные листы, чертежи и рендеры:**
+  * `user_viewport_reference.jpg` — Исходный скриншот из Blender Viewport.
+  * `real_reference_perspective.png` — Студийный ракурс 3/4 модели-образца.
+  * `step50_master_leg_side_ortho.png` — Боковой ортографический чертеж с осями вращения.
+  * `step50_master_leg_wireframe.png` — Полигональная сетка топологии (Wireframe).
   * Поэтапные аудиты `phase1_audit_contact_sheet.png` ... `phase6_audit_contact_sheet.png`.
-  * Сравнения с референсом: `confirmed_photo4_source_render.png`, `step50_master_leg_hero_perspective.png`, `step50_master_knee_gear_closeup.png`.
 
 ### 3. `skills/` — Библиотека навыков для ИИ-Агентов (Agent Skills)
 Стандартизированные файлы `SKILL.md`, готовые к подключению к автономным агентам:
