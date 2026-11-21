@@ -1,0 +1,36 @@
+{
+  "phase": "PHASE_I",
+  "steps_completed": [
+    "01",
+    "02",
+    "03",
+    "04",
+    "05"
+  ],
+  "pivots": {
+    "hip": [
+      0.0,
+      0.6665,
+      3.2355
+    ],
+    "knee": [
+      0.0,
+      0.06,
+      1.8595
+    ],
+    "ankle": [
+      0.0,
+      -0.2245,
+      0.5343
+    ]
+  },
+  "thigh_bone_length": 1.5037,
+  "shin_bone_length": 1.3554,
+  "deck_dimensions": [
+    1.6,
+    2.4,
+    0.55
+  ],
+  "deck_bolts_count": 8,
+  "total_master_parts": 53
+}

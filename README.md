@@ -24,7 +24,7 @@
 * **00_AGENT_TUTORIAL_START_HERE.md** — Главный манифест входа для агентов.
 * **01_MCP_AND_BLENDER_CONTROL/** — Интеграция Blender через MCP-серверы и live-мосты (`antigravity-blender-mcp`, `blender-live-addon`).
 * **02_CORE_GEOMETRY_AND_MATH/** — Математика и правила построения твердотельной геометрии (`geometry_utils.py`).
-* **03_ROBOT_HARD_SURFACE_MODELING/** — Хард-сурфейс моделирование, конформная топология, распил бронеплит и кабины.
+* **03_ROBOT_HARD_SURFACE_MODELING/** — Хард-сурфейс моделирование, конформная топология, распил бронеплит, кабины и **`MASTERCLASS_MECH_LEG_ENGINEERING.md`** (детальный мастеркласс 4-слойной сборки ноги боевого меха).
 * **04_VEHICLE_AND_UNIT_LIBRARY/** — Библиотека шасси, гусениц, шагателей и летательных аппаратов.
 * **05_PBR_MATERIALS_AND_SURFACE_WEAR/** — Процедурные PBR металлы, износ граней и тактические декали.
 * **06_MECHANICAL_RIGGING_AND_SKELETONS/** — Риггинг суставов, поршней, двуногих мехов и кейс-стади Dreadnought Titan.
@@ -32,6 +32,22 @@
 * **08_ENGINE_EXPORT_ADAPTATION/** — Подготовка и экспорт в игровые движки (Unreal Engine, Unity, Three.js).
 * **09_PRODUCTION_SCRIPTS_AND_TEMPLATES/** — Эталонные скрипты и документация `dreadnought_agent_skill_guide.md`.
 * **EXTENSIONS_HUMANOID_AND_ORGANIC/** — Расширения для биомеханических и гуманоидных моделей.
+
+### 3. `LEG_STUDY_LAB/` — Эталонная Hard-Surface Нога Меха (3D Сборка, 50 шагов)
+Полная лаборатория реверса и процедурного воссоздания эталонной ноги:
+* **3D Сцены Blender (`.blend`):**
+  * `MASTER_LEG_50_STEPS_COMPLETE.blend` — Финальная сборка ноги (все 50 шагов, гидравлика, зубчатые венцы, PBR).
+  * `REFERENCE_LEG_ISOLATED.blend` и `LEg1_OK.blend` — Изолированная оригинальная нога референса (53 детали).
+  * Фазовые сборки: `PHASE1_TO_6_EXECUTION.blend`, `PHASE1_TO_5_EXECUTION.blend`, `PHASE1_AND_PHASE2_EXECUTION.blend`.
+* **Скрипты сборки по фазам (`execute_phase*.py`):**
+  * `execute_phase1_steps.py` — Блокаут кинематических осей и габаритов.
+  * `execute_phase3_hydraulics.py` — Гидроцилиндры и зеркальные штоки.
+  * `execute_phase4_subsystems.py` — Теплообменные бачки и щелевые радиаторы.
+  * `execute_phase5_armor.py` — Накладные фацетированные бронеплиты.
+  * `execute_phase6_foot.py` & `execute_phase7_final_assembly.py` — 4-палая карданная стопа и финальная сборка.
+* **Визуальные контактные листы и рендеры:**
+  * Поэтапные аудиты `phase1_audit_contact_sheet.png` ... `phase6_audit_contact_sheet.png`.
+  * Сравнения с референсом: `confirmed_photo4_source_render.png`, `step50_master_leg_hero_perspective.png`, `step50_master_knee_gear_closeup.png`.
 
 ### 3. `skills/` — Библиотека навыков для ИИ-Агентов (Agent Skills)
 Стандартизированные файлы `SKILL.md`, готовые к подключению к автономным агентам:
